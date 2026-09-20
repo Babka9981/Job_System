@@ -1,11 +1,13 @@
+import base64
+import inspect
 import json
 import os
-import urllib.error
-import urllib.request
+import time
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
 from .budget import BudgetPending, BudgetUnavailable, mark_usage_pending, reserve_usage, settle_usage
+from .http_process import HTTPProcessError, run_http_exchange
 
 
 DEFAULT_CV_DEVELOPER_PROMPT = (
@@ -62,23 +64,29 @@ def _validate(value, schema, path="result"):
 class OpenAIResponsesTransport:
     endpoint = "https://api.openai.com/v1/responses"
 
-    def create_response(self, *, api_key, payload):
-        request = urllib.request.Request(
-            self.endpoint,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            method="POST",
-        )
+    def __init__(self, *, process_factory=None):
+        self.process_factory = process_factory
+
+    def create_response(self, *, api_key, payload, deadline=None, clock=None):
+        clock = clock or time.monotonic
+        deadline = deadline if deadline is not None else clock() + 45
         body = None
-        request_id = ""
         try:
-            with urllib.request.urlopen(request, timeout=45) as response:
-                body = json.load(response)
-                request_id = response.headers.get("x-request-id", "")
-        except (OSError, urllib.error.HTTPError, ValueError):
-            pass
-        if body is None:
-            raise GatewayError("provider_error", "OpenAI временно недоступен.")
+            result = run_http_exchange({
+                "url": self.endpoint,
+                "method": "POST",
+                "headers": {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                "body_b64": base64.b64encode(json.dumps(payload).encode("utf-8")).decode("ascii"),
+                "max_bytes": 5_000_000,
+                "socket_timeout": min(45, max(deadline - clock(), 0.1)),
+            }, deadline=deadline, clock=clock, process_factory=self.process_factory)
+            body = json.loads(result["body"])
+            request_id = next((str(value) for key, value in result["headers"].items() if key.lower() == "x-request-id"), "")
+        except HTTPProcessError as exc:
+            code = "deadline_exceeded" if exc.code == "deadline_exceeded" else "provider_error"
+            raise GatewayError(code, "OpenAI временно недоступен.") from None
+        except (TypeError, ValueError):
+            raise GatewayError("provider_error", "OpenAI временно недоступен.") from None
         parsed = None
         try:
             text = next(
@@ -106,6 +114,7 @@ class OpenAIGateway:
     def structured(
         self, *, owner, operation, input_text, schema, daily_limit,
         max_input_tokens, max_output_tokens, developer_prompt: str | None = None,
+        deadline=None, clock=None,
     ):
         if not self.api_key:
             raise GatewayUnavailable("missing_api_key", "OpenAI API key не настроен.")
@@ -141,6 +150,19 @@ class OpenAIGateway:
         conservative_input_tokens = len(json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
         if conservative_input_tokens > max_input_tokens:
             raise GatewayUnavailable("input_too_large", "Вход превышает настроенный безопасный лимит OpenAI.")
+        clock = clock or time.monotonic
+        if deadline is not None:
+            try:
+                parameters = inspect.signature(self.transport.create_response).parameters.values()
+            except (TypeError, ValueError):
+                parameters = ()
+            supports_deadline = any(parameter.kind == parameter.VAR_KEYWORD for parameter in parameters) or {
+                "deadline", "clock"
+            } <= {parameter.name for parameter in parameters}
+            if not supports_deadline:
+                raise GatewayUnavailable("unsafe_transport", "OpenAI transport не поддерживает отменяемый deadline.")
+            if clock() >= deadline:
+                raise GatewayUnavailable("deadline_exceeded", "Истёк лимит времени OpenAI.")
         max_cost = (Decimal(max_input_tokens) * input_price + Decimal(max_output_tokens) * output_price) / Decimal(1_000_000)
         try:
             reservation = reserve_usage(owner, kind=operation, max_cost=max_cost, daily_limit=daily_limit)
@@ -148,7 +170,16 @@ class OpenAIGateway:
             raise GatewayUnavailable(exc.code, str(exc)) from None
         safe_error = None
         try:
-            response = self.transport.create_response(api_key=self.api_key, payload=payload)
+            if deadline is not None:
+                if clock() >= deadline:
+                    raise GatewayError("deadline_exceeded", "OpenAI deadline exceeded.")
+                response = self.transport.create_response(
+                    api_key=self.api_key, payload=payload, deadline=deadline, clock=clock,
+                )
+                if clock() > deadline:
+                    raise GatewayError("deadline_exceeded", "OpenAI deadline exceeded.")
+            else:
+                response = self.transport.create_response(api_key=self.api_key, payload=payload)
             actual_cost = (Decimal(response.input_tokens) * input_price + Decimal(response.output_tokens) * output_price) / Decimal(1_000_000)
             settle_usage(
                 reservation,

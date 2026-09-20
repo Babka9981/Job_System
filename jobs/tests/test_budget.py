@@ -1,12 +1,14 @@
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
+import subprocess
+import time
 import traceback
 
 from django.contrib.auth import get_user_model
 from django.test import TransactionTestCase
 
 from jobs.intelligence.budget import BudgetPending, BudgetUnavailable, reserve_usage
-from jobs.intelligence.gateway import GatewayError, GatewayResponse, GatewayUnavailable, OpenAIGateway
+from jobs.intelligence.gateway import GatewayError, GatewayResponse, GatewayUnavailable, OpenAIGateway, OpenAIResponsesTransport
 from jobs.models.models import UsageReservation
 from jobs.models.models import UsageLedger
 
@@ -27,6 +29,15 @@ class FakeTransport:
 class FailingTransport:
     def create_response(self, **kwargs):
         raise RuntimeError("sk-secret full upstream response and private CV")
+
+
+class DeadlineTransport:
+    def __init__(self):
+        self.closed = False
+
+    def create_response(self, *, api_key, payload, deadline, clock):
+        self.closed = True
+        raise GatewayError("deadline_exceeded", "closed")
 
 
 class AtomicBudgetTests(TransactionTestCase):
@@ -204,3 +215,60 @@ class AtomicBudgetTests(TransactionTestCase):
         self.assertNotIn("sk-secret", rendered)
         self.assertNotIn("private CV", rendered)
         self.assertEqual(UsageReservation.objects.get().status, "pending")
+
+    def test_deadline_aware_gateway_closes_operation_and_keeps_uncertain_reservation_pending(self):
+        owner = get_user_model().objects.create_user("deadline-owner")
+        transport = DeadlineTransport()
+        gateway = OpenAIGateway(
+            transport=transport, api_key="sk-test", model="gpt-test",
+            prices={"gpt-test": {"input_per_million": "1", "output_per_million": "2"}},
+        )
+        schema = {"type": "object", "properties": {}, "required": [], "additionalProperties": False}
+        with self.assertRaises(GatewayError) as caught:
+            gateway.structured(
+                owner=owner, operation="research", input_text="page", schema=schema,
+                daily_limit="1", max_input_tokens=1000, max_output_tokens=100,
+                deadline=1.0, clock=lambda: 0.0,
+            )
+        self.assertEqual(caught.exception.code, "deadline_exceeded")
+        self.assertTrue(transport.closed)
+        self.assertEqual(UsageReservation.objects.get().status, "pending")
+
+    def test_unsafe_deadline_transport_is_rejected_before_budget_reservation(self):
+        owner = get_user_model().objects.create_user("unsafe-deadline-owner")
+        gateway = OpenAIGateway(
+            transport=FakeTransport(), api_key="sk-test", model="gpt-test",
+            prices={"gpt-test": {"input_per_million": "1", "output_per_million": "2"}},
+        )
+        schema = {"type": "object", "properties": {}, "required": [], "additionalProperties": False}
+        with self.assertRaises(GatewayUnavailable) as caught:
+            gateway.structured(
+                owner=owner, operation="research", input_text="page", schema=schema,
+                daily_limit="1", max_input_tokens=1000, max_output_tokens=100,
+                deadline=1.0, clock=lambda: 0.0,
+            )
+        self.assertEqual(caught.exception.code, "unsafe_transport")
+        self.assertFalse(UsageReservation.objects.filter(owner=owner).exists())
+
+    def test_default_openai_transport_kills_and_reaps_at_absolute_deadline(self):
+        class Process:
+            killed = False
+            reaped = False
+            returncode = None
+            def communicate(self, input=None, timeout=None):
+                if not self.killed:
+                    raise subprocess.TimeoutExpired("http-worker", timeout)
+                self.reaped = True
+                self.returncode = -9
+                return (b"", b"")
+            def kill(self): self.killed = True
+        process = Process()
+        transport = OpenAIResponsesTransport(process_factory=lambda *args, **kwargs: process)
+        with self.assertRaises(GatewayError) as caught:
+            transport.create_response(
+                api_key="sk-test", payload={},
+                deadline=time.monotonic() + 0.01, clock=time.monotonic,
+            )
+        self.assertEqual(caught.exception.code, "deadline_exceeded")
+        self.assertTrue(process.killed)
+        self.assertTrue(process.reaped)

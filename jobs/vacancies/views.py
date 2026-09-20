@@ -5,9 +5,11 @@ from django.core.paginator import Paginator
 from django.db.models import F, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
 
 from jobs.core.access import owner_required
+from jobs.intelligence.research import research as research_company
 from jobs.models.models import Source, Vacancy
 
 from .forms import ManualVacancyForm
@@ -90,6 +92,30 @@ def vacancy_detail(request, vacancy_id):
 
 def _render_detail(request, vacancy, *, status=200, state="", error="", submitted=None):
     submitted = submitted or {}
+    latest_research = vacancy.research.order_by("-created_at").first()
+    profile = getattr(request.user, "job_profile", None)
+    if latest_research and profile:
+        cached_role = latest_research.role or vacancy.role or vacancy.title
+        covered_roles = {
+            str(value).casefold()
+            for value in latest_research.coverage.get("roles", [])
+        }
+        cache_is_reusable = (
+            latest_research.status in (latest_research.Status.COMPLETE, latest_research.Status.PARTIAL)
+            and latest_research.expires_at
+            and latest_research.expires_at > timezone.now()
+            and bool(latest_research.domain)
+            and cached_role.casefold() in covered_roles
+        )
+        if cache_is_reusable and latest_research.coverage.get("profile_version") != profile.version:
+            latest_research = research_company(
+                vacancy,
+                company=latest_research.company,
+                domain=latest_research.domain,
+                role=cached_role,
+                refresh=False,
+                profile=profile,
+            )
     form_values = {
         "status": submitted.get("status", vacancy.user_status),
         "closing_note": submitted.get("note", vacancy.closing_note),
@@ -103,6 +129,7 @@ def _render_detail(request, vacancy, *, status=200, state="", error="", submitte
             "section": "vacancies",
             "title": vacancy.title or "Вакансия",
             "vacancy": vacancy,
+            "latest_research": latest_research,
             "statuses": Vacancy.UserStatus.choices,
             "availability_choices": Vacancy.Availability.choices,
             "state": state,
@@ -195,6 +222,26 @@ def vacancy_note(request, vacancy_id):
             owner=request.user,
         ),
     )
+
+
+@owner_required
+@require_POST
+def vacancy_research(request, vacancy_id):
+    vacancy = get_object_or_404(Vacancy, pk=vacancy_id, owner=request.user)
+    result = research_company(
+        vacancy,
+        company=vacancy.company,
+        domain=request.POST.get("domain", ""),
+        role=vacancy.role or vacancy.title,
+        refresh=request.POST.get("refresh") == "1",
+    )
+    if result.domain and result.domain != vacancy.company_domain:
+        Vacancy.objects.filter(pk=vacancy.pk, owner=request.user).update(
+            company_domain=result.domain,
+            version=F("version") + 1,
+            updated_at=timezone.now(),
+        )
+    return redirect("vacancy-detail", vacancy_id=vacancy.id)
 
 
 @owner_required

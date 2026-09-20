@@ -1,4 +1,5 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -6,7 +7,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from jobs.models.models import Source, Vacancy
+from jobs.models.models import Profile, ProfileFact, Research, Source, Vacancy
 from jobs.vacancies.services import VersionConflict, change_status, upsert_record
 
 
@@ -767,6 +768,180 @@ class VacancyHttpTests(TestCase):
         self.assertContains(response, "https://apply.example.test/exact-1")
         self.assertContains(response, "Дата неизвестна")
         self.assertNotContains(response, "Контакт из объявления")
+
+    def test_card_shows_latest_research_progress_facts_sources_and_uncertainty(self):
+        vacancy = Vacancy.objects.create(owner=self.owner, title="Product Lead", company="Acme")
+        Research.objects.create(
+            vacancy=vacancy,
+            company="Acme",
+            domain="acme.example",
+            role="Product Lead",
+            status=Research.Status.PARTIAL,
+            facts=[{
+                "text": "Acme запустила платформу платежей",
+                "passage": "Acme запустила платформу платежей в 2026 году.",
+                "url": "https://acme.example/news/launch",
+                "source_type": "official",
+                "event_date": "2026",
+                "checked_at": "2026-09-20T12:00:00+00:00",
+            }],
+            sources=[{
+                "url": "https://acme.example/news/launch",
+                "title": "Запуск платформы",
+                "source_type": "official",
+                "checked_at": "2026-09-20T12:00:00+00:00",
+            }],
+            coverage={
+                "progress": "Проверено страниц: 1; не удалось прочитать: 1.",
+                "conflicts": [{"summary": "Источники расходятся по дате", "fact_indices": [0]}],
+                "hypotheses": ["Роль может поддерживать новый продукт"],
+                "cases": [{"id": 7, "text": "Запустил B2B-продукт", "source": "CV", "page": 2}],
+            },
+        )
+
+        response = self.client.get(reverse("vacancy-detail", args=[vacancy.id]))
+
+        self.assertContains(response, "Исследование компании")
+        self.assertContains(response, "Проверено страниц: 1")
+        self.assertContains(response, "Acme запустила платформу платежей")
+        self.assertContains(response, "https://acme.example/news/launch")
+        self.assertContains(response, "Источники расходятся по дате")
+        self.assertContains(response, "Роль может поддерживать новый продукт")
+        self.assertContains(response, "Запустил B2B-продукт")
+
+    def test_owner_can_start_research_with_confirmed_domain(self):
+        vacancy = Vacancy.objects.create(
+            owner=self.owner,
+            title="Product Lead",
+            company="Acme",
+            role="Product Lead",
+        )
+        created = Research.objects.create(
+            vacancy=vacancy,
+            company="Acme",
+            domain="acme.example",
+            role="Product Lead",
+            status=Research.Status.PARTIAL,
+        )
+
+        with mock.patch("jobs.vacancies.views.research_company", return_value=created) as service:
+            response = self.client.post(
+                reverse("vacancy-research", args=[vacancy.id]),
+                {"domain": "https://www.acme.example/about"},
+            )
+
+        self.assertRedirects(response, reverse("vacancy-detail", args=[vacancy.id]))
+        service.assert_called_once_with(
+            vacancy,
+            company="Acme",
+            domain="https://www.acme.example/about",
+            role="Product Lead",
+            refresh=False,
+        )
+
+    def test_refresh_uses_override_and_persists_resolved_confirmed_domain(self):
+        vacancy = Vacancy.objects.create(
+            owner=self.owner,
+            title="Support Lead",
+            company="Old Co",
+            company_domain="old.example",
+        )
+        refreshed = Research.objects.create(
+            vacancy=vacancy,
+            company="Old Co",
+            domain="new.example",
+            role="Support Lead",
+            status=Research.Status.COMPLETE,
+        )
+
+        with mock.patch("jobs.vacancies.views.research_company", return_value=refreshed) as service:
+            response = self.client.post(
+                reverse("vacancy-research", args=[vacancy.id]),
+                {"domain": "https://www.new.example/about", "refresh": "1"},
+            )
+
+        self.assertRedirects(response, reverse("vacancy-detail", args=[vacancy.id]))
+        vacancy.refresh_from_db()
+        self.assertEqual(vacancy.company_domain, "new.example")
+        service.assert_called_once_with(
+            vacancy,
+            company="Old Co",
+            domain="https://www.new.example/about",
+            role="Support Lead",
+            refresh=True,
+        )
+
+    def test_needs_domain_shows_clarification_with_discovered_candidates(self):
+        vacancy = Vacancy.objects.create(owner=self.owner, title="Designer", company="Acme")
+        Research.objects.create(
+            vacancy=vacancy,
+            company="Acme",
+            role="Designer",
+            status=Research.Status.NEEDS_DOMAIN,
+            coverage={
+                "progress": "Требуется подтверждённый домен компании.",
+                "candidate_domains": ["acme.example", "acme-group.example"],
+                "conflicts": [],
+                "hypotheses": [],
+            },
+        )
+
+        response = self.client.get(reverse("vacancy-detail", args=[vacancy.id]))
+
+        self.assertContains(response, "Подтвердите её официальный домен")
+        self.assertContains(response, "acme.example")
+        self.assertContains(response, "acme-group.example")
+        self.assertContains(response, 'id="research-domain"')
+        self.assertContains(response, "required")
+
+    def test_profile_change_reselects_cached_cases_on_card_without_new_search(self):
+        vacancy = Vacancy.objects.create(
+            owner=self.owner,
+            title="Product Lead",
+            company="Acme",
+            company_domain="acme.example",
+            role="Product Lead",
+        )
+        profile = Profile.objects.create(owner=self.owner, version=2, confirmed_version=2)
+        ProfileFact.objects.create(
+            profile=profile,
+            text="Запустил актуальный продуктовый кейс",
+            kind="case",
+            source="CV",
+            page=4,
+            profile_version=2,
+            confirmed=True,
+        )
+        cached = Research.objects.create(
+            vacancy=vacancy,
+            company="Acme",
+            domain="acme.example",
+            role="Product Lead",
+            status=Research.Status.PARTIAL,
+            expires_at=timezone.now() + timedelta(hours=1),
+            coverage={
+                "profile_version": 1,
+                "roles": ["Product Lead"],
+                "cases": [{"text": "Устаревший кейс"}],
+                "progress": "Использованы ранее прочитанные источники.",
+                "conflicts": [],
+                "hypotheses": [],
+            },
+        )
+
+        with mock.patch(
+            "jobs.intelligence.research.service.TavilySearchProvider.search",
+            side_effect=AssertionError("общий поиск не должен повторяться"),
+        ) as search:
+            response = self.client.get(reverse("vacancy-detail", args=[vacancy.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Запустил актуальный продуктовый кейс")
+        self.assertNotContains(response, "Устаревший кейс")
+        self.assertEqual(Research.objects.count(), 1)
+        cached.refresh_from_db()
+        self.assertEqual(cached.coverage["profile_version"], 2)
+        search.assert_not_called()
 
     @override_settings(USER_TIME_ZONE="Europe/Moscow")
     def test_list_and_detail_render_dates_in_configured_user_timezone(self):
