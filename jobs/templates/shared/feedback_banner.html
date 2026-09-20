@@ -1,0 +1,1 @@
+<div class="feedback-banner tone-{{ tone|default:'neutral' }}" {% if tone == 'danger' %}role="alert"{% else %}role="status" aria-live="polite"{% endif %}>{{ message }}</div>

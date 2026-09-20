@@ -73,3 +73,16 @@ Content permission проверяется до LLM; CV/Search/Jobs недове�
 Команды приложения пока отсутствуют. T01 должен создать и проверить реальные команды
 установки, миграций, запуска и тестов; не считать будущую строку manage.py работающей.
 Недостающая dependency сообщается как BLOCKED; установка по решению оркестратора.
+
+## Реализовано в T01
+
+- HTTP: `/`, `/profile/`, `/sources/`, `/accounts/login/`, POST `/accounts/logout/`.
+- CLI: `manage.py create_owner [--username USERNAME] [--no-input]`.
+- ORM: `Profile`, `Resume`, `ProfileFact`, `Source`, `Vacancy`, `SourceRecord`,
+  `TemporarySourceContent`, `Research`, `Draft`, `Run`, `Lease`,
+  `UsageReservation`, `UsageLedger`, `NotificationOutbox`.
+- Временное хранение: `TemporaryContentStorage`, корень `settings.TEMPORARY_ROOT`.
+- UI: `JobDrawer.createDrawerController({shell,toggle,drawer,backdrop,isMobile,returnFocus,focusFirst})`;
+  `drawer.js` — единственный владелец регистрации toggle-click.
+- Проверки: `manage.py test`, `manage.py migrate`, `manage.py check --deploy`,
+  `manage.py makemigrations --check --dry-run`.

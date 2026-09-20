@@ -22,8 +22,14 @@
 Сборка ведётся навыком `autopilot`. Состояние — `.autopilot/state.js`,
 прогресс — `.autopilot/dashboard.html`. Требования может отменять только пользователь.
 Локальные таски `.scratch/` должны ссылаться на соответствующие таски сборки.
-Текущее поручение ограничено подготовкой. Все тикеты not-started: выполнять их
-только после отдельной команды пользователя. План — `docs/planning/README.md`.
+Пользователь дал отдельную команду начать реализацию 20.09.2026. Выполнять тикеты
+по зависимостям из плана `docs/planning/README.md`.
 Канонические тексты тикетов — `.scratch/job-search-mvp/issues/`; в `.autopilot/`
-хранятся ссылки и состояние. Не запускать build автоматически при продолжении чата.
+хранятся ссылки и состояние.
+
+Проверенные команды bootstrap: `.\.venv\Scripts\python.exe manage.py test`,
+`node --test jobs/static/ui/tests/*.test.cjs` и
+`.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run`.
+Django сам не загружает `.env`: production-переменные задаются process manager либо
+в окружении процесса; воспроизводимый `check --deploy` описан в `README.md`.
 <!-- autopilot:end -->

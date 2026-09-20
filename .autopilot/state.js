@@ -2,17 +2,17 @@ window.STATE =
 {
   "slug": "job-search-mvp",
   "dir": "2026-09-20-job-search-mvp--wip",
-  "title": "План готов — ожидание команды на разработку",
+  "title": "Персональный поиск работы — разработка",
   "mode": "semi",
   "depth": "normal",
   "polish": null,
   "tier": "T3",
-  "executionGate": "Остановлено пользователем после подготовки; не запускать тикеты без отдельной команды",
+  "executionGate": null,
   "briefFile": "2026-09-20-brief.md",
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/IliaF/.codex/skills/autopilot",
   "startedAt": "2026-09-20T15:27:16+03:00",
-  "updatedAt": "2026-09-20T15:46:44+03:00",
+  "updatedAt": "2026-09-20T17:30:00+03:00",
   "finishedAt": null,
   "stages": [
     {"id":"preflight","status":"done","startedAt":"2026-09-20T15:27:16+03:00","finishedAt":"2026-09-20T15:46:44+03:00","note":"Репозиторий и исходные документы проверены"},
@@ -20,8 +20,8 @@ window.STATE =
     {"id":"briefing","status":"done","finishedAt":"2026-09-20T15:46:44+03:00","note":"OpenAI, настраиваемый поиск, CV extraction; search provider уточняется перед T08"},
     {"id":"spec","status":"done","finishedAt":"2026-09-20T15:46:44+03:00","note":"Независимая проверка пройдена"},
     {"id":"plan","status":"done","finishedAt":"2026-09-20T15:46:44+03:00","note":"12 тикетов; реализация ожидает команды"},
-    {"id":"build","status":"pending"},
-    {"id":"review","status":"pending"},
+    {"id":"build","status":"active","startedAt":"2026-09-20T16:05:00+03:00","note":"T01 завершён; готова волна T02/T03"},
+    {"id":"review","status":"active","startedAt":"2026-09-20T16:40:00+03:00","note":"T01: manifest/spec и craft review"},
     {"id":"final","status":"pending"}
   ],
   "requirements":{"total":76,"done":1,"inTicket":75,"inSpec":0,"placeholder":0,"deferred":0,"dropped":0},
@@ -45,9 +45,12 @@ window.STATE =
       "jobs/templates/shared/",
       "jobs/static/ui/"
     ],
-    "status": "pending",
-    "retries": 0,
-    "repairs": 0,
+    "status": "done",
+    "startedAt": "2026-09-20T16:05:00+03:00",
+    "finishedAt": "2026-09-20T17:30:00+03:00",
+    "tests": "Django 19/19; Node drawer 4/4; deploy check 0; migration drift none",
+    "retries": 1,
+    "repairs": 2,
     "handoffs": 0,
     "githubIssue": "https://github.com/Babka9981/Job_System/issues/1"
   },
@@ -407,6 +410,6 @@ window.STATE =
   }
 ],"singlePass":null,"tests":null,
   "debt":{"placeholders":[],"assumptions":[],"emptyEnv":[]},
-  "additions":[],"coverage":{"found":9,"fixed":9,"deferred":0,"note":"7 замечаний спецификации и 2 контракта/плана исправлены"},"concerns":[],
-  "reviewers":{"manifestSpec":"/root/spec_check","craft":null},"blind":null
+  "additions":[],"coverage":{"found":9,"fixed":9,"deferred":0,"note":"7 замечаний спецификации и 2 контракта/плана исправлены"},"concerns":["T01: интерактивный browser smoke не стартовал из-за failed to write kernel assets; UI покрыт HTTP/JS/ARIA и bootstrap Node-тестами","T01: process-local login throttle до deployment должен получить общий атомарный cache backend","T01: проект закрепляет Python 3.13.15, локальный runner проверки был 3.13.7"],
+  "reviewers":{"manifestSpec":"/root/spec_check","craft":"/root/craft_review"},"blind":null
 }

@@ -4,10 +4,11 @@
 .venv/
 node_modules/
 __pycache__/
-*.pyc
+*.py[cod]
 *.sqlite3
 *.sqlite3-*
 private/
+temporary/
 staticfiles/
 .DS_Store
 .autopilot/serve.*

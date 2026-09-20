@@ -1,0 +1,8 @@
+{% if state == "loading" %}<div class="ui-state" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span><h2>{{ state_title|default:"Загрузка" }}</h2><p>{{ state_message|default:"Получаем данные…" }}</p></div>
+{% elif state == "error" %}<div class="feedback-banner tone-danger" role="alert"><h2>{{ state_title|default:"Не удалось загрузить данные" }}</h2><p>{{ state_message }}</p>{% if retry_url %}<a class="button button-secondary" href="{{ retry_url }}">Повторить</a>{% endif %}</div>
+{% elif state == "forbidden" %}<div class="ui-state" role="alert"><h2>{{ state_title|default:"Нет доступа" }}</h2><p>{{ state_message }}</p></div>
+{% elif state == "saving" %}<div class="feedback-banner tone-info" role="status" aria-live="polite"><p>{{ state_message|default:"Сохраняем…" }}</p></div>
+{% elif state == "success" %}<div class="feedback-banner tone-success" role="status" aria-live="polite"><p>{{ state_message|default:"Сохранено" }}</p></div>
+{% elif state == "conflict" %}<div class="feedback-banner tone-warning" role="alert"><h2>{{ state_title|default:"Данные изменились" }}</h2><p>{{ state_message|default:"Загрузите текущую версию — ваши изменения не будут перезаписаны автоматически." }}</p></div>
+{% elif state == "offline" %}<div class="feedback-banner tone-warning" role="status" aria-live="polite"><p>{{ state_message|default:"Нет соединения. Изменения пока не отправлены." }}</p></div>
+{% else %}<div class="ui-state"><h2 id="empty-title">{{ state_title|default:"Пока пусто" }}</h2><p>{{ state_message }}</p>{% if action_url %}<a class="button button-primary" href="{{ action_url }}">{{ action_label }}</a>{% endif %}</div>{% endif %}
