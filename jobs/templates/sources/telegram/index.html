@@ -1,0 +1,66 @@
+{% extends "shared/app_shell.html" %}
+{% block content %}
+<header class="page-heading">
+  <div>
+    <p class="eyebrow">Источники</p>
+    <h1>Telegram-каналы</h1>
+    <p>Чтение выполняется пользовательской session отдельно от notification bot. Вход не означает разрешение на LLM.</p>
+  </div>
+</header>
+
+{% for message in messages %}<div class="feedback-banner tone-success" role="status" aria-live="polite">{{ message }}</div>{% endfor %}
+{% if form_error %}<div class="feedback-banner tone-danger" role="alert">{{ form_error }}</div>{% endif %}
+
+<div class="field-grid">
+  <section class="ui-card" aria-labelledby="runtime-title">
+    <h2 id="runtime-title">Локальная user-session</h2>
+    <p><strong>{{ runtime.label }}</strong></p>
+    <p>{{ runtime.message }}</p>
+    <p>{{ live_verification }}</p>
+    <p>Локальная точка входа: <code>python manage.py telegram_authorize</code>. Телефон, код входа и 2FA вводятся только в терминале и не отправляются через веб-форму.</p>
+  </section>
+  <section class="ui-card" aria-labelledby="add-title">
+    <h2 id="add-title">Добавить публичный канал</h2>
+    <form method="post" class="form-stack" data-submit-lock>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add">
+      <div>
+        <label for="telegram-link">Ссылка Telegram</label>
+        <input class="form-control" id="telegram-link" name="link" type="url" required placeholder="https://t.me/channel_name" {% if form_error %}aria-invalid="true" aria-describedby="telegram-error"{% endif %}>
+        <p id="telegram-error">Только публичная ссылка канала; invite и ссылка на отдельный пост не подходят.</p>
+      </div>
+      <button class="button button-primary" type="submit">Добавить источник</button>
+    </form>
+  </section>
+</div>
+
+<section class="ui-card">
+  <h2>Каналы ({{ rows|length }})</h2>
+  <div class="table-container" role="region" aria-label="Telegram-источники" tabindex="0">
+    <table>
+      <thead><tr><th>Канал</th><th>Состояние</th><th>Checkpoint</th><th>На проверку</th><th>Ошибка</th><th>Действие</th></tr></thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <th scope="row"><a href="{{ row.link }}" rel="noreferrer">{{ row.source.name }}</a></th>
+          <td>{% if row.source.enabled %}Включён{% else %}Отключён{% endif %}</td>
+          <td>{{ row.checkpoint|default:"Ещё нет" }}</td>
+          <td>{{ row.review_count }}</td>
+          <td>{% if row.last_error %}<span role="alert">{{ row.last_error }}</span>{% else %}Нет{% endif %}</td>
+          <td>
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="link" value="{{ row.link }}">
+              <input type="hidden" name="action" value="{% if row.source.enabled %}disable{% else %}enable{% endif %}">
+              <button class="button button-secondary" type="submit">{% if row.source.enabled %}Отключить{% else %}Включить{% endif %}</button>
+            </form>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6">Telegram-источники ещё не добавлены.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

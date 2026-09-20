@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "jobs.core",
     "jobs.models",
+    "jobs.sources.telegram",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

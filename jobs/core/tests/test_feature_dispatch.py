@@ -20,3 +20,12 @@ class FeatureDispatchTests(SimpleTestCase):
         self.assertEqual(reverse("sources"), "/sources/")
         self.assertEqual(match.url_name, "sources")
         self.assertEqual(match.func.__module__, "jobs.sources.core.views")
+
+    def test_telegram_sources_are_delegated_and_keep_owner_auth_boundary(self):
+        match = resolve("/sources/telegram/")
+        self.assertEqual(reverse("manage"), "/sources/telegram/")
+        self.assertEqual(match.url_name, "manage")
+        self.assertEqual(match.func.__module__, "jobs.sources.telegram.views")
+
+        response = self.client.get(reverse("manage"))
+        self.assertRedirects(response, f'{reverse("login")}?next={reverse("manage")}')
