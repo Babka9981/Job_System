@@ -37,4 +37,7 @@ Dedup вакансий: URL сам по себе никогда не являе�
 источника identity — `source+external_id`, fallback `source+exact URL`; между
 источниками merge разрешён только по непустому content hash или структурированному
 adapter-confirmed permalink. Permission/evidence флаги принимают только literal `True`.
+Provenance публичного описания: SourceRecord.raw_hash — SHA-256 точного очищенного
+текста, сохранённого в Vacancy.description. Разрешение на LLM не переносится при
+изменении текста и действительно только при literal True вместе с точным hash.
 <!-- autopilot:end -->

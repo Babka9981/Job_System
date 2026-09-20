@@ -1,0 +1,39 @@
+{% extends "shared/app_shell.html" %}
+{% block content %}
+<header class="page-heading">
+  <div><p class="eyebrow">Мониторинг</p><h1>Источники</h1><p>Реестр показывает фактическую готовность и ограничения каждого подключения.</p></div>
+</header>
+
+<div class="field-grid" aria-label="Состав реестра">
+  <section class="ui-card" aria-label="Всего источников"><strong>{{ total_count }} источников</strong><p>Сайты и Telegram-каналы</p></section>
+  <section class="ui-card" aria-label="Сайты"><strong>{{ site_count }} сайтов</strong><p>Только поддержанные способы доступа</p></section>
+  <section class="ui-card" aria-label="Telegram"><strong>{{ telegram_count }} Telegram</strong><p>Требуют пользовательскую сессию</p></section>
+</div>
+
+<section class="ui-card">
+  <h2>Состояние подключений</h2>
+  <div class="table-container" role="region" aria-label="Реестр источников" tabindex="0">
+    <table>
+      <thead><tr><th>Источник</th><th>Включён</th><th>Статус</th><th>Режим</th><th>Последняя проверка</th><th>Последний успех</th><th>Покрытие</th><th>Ошибка / причина</th><th>Интервал сервиса</th><th>Свежесть поставщика</th></tr></thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <th scope="row">{{ row.source.name }}</th>
+          <td>{% if row.source.enabled %}Да{% else %}Нет{% endif %}</td>
+          <td>{% include "shared/status_badge.html" with tone=row.tone label=row.status_label %}</td>
+          <td>{{ row.mode }}</td>
+          <td>{{ row.last_check }}</td>
+          <td>{{ row.last_success }}</td>
+          <td>{{ row.coverage_reason }}</td>
+          <td>{% if row.error != "Нет" %}<span role="alert">{{ row.error }}</span>{% else %}{{ row.reason }}{% endif %}</td>
+          <td>{{ row.service_interval }}</td>
+          <td>{{ row.provider_freshness }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="10">Реестр пока пуст.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

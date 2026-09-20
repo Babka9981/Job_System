@@ -6,6 +6,6 @@ urlpatterns = [
     path("accounts/login/", RateLimitedLoginView.as_view(), name="login"),
     path("accounts/logout/", LogoutView.as_view(), name="logout"),
     path("profile/", include("jobs.profile.urls")),
-    path("sources/", lambda request: section(request, "sources"), name="sources"),
+    path("sources/", include("jobs.sources.core.urls")),
     path("", include("jobs.vacancies.urls")),
 ]

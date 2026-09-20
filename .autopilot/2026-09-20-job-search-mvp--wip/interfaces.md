@@ -93,6 +93,22 @@ Content permission проверяется до LLM; CV/Search/Jobs недове�
 установки, миграций, запуска и тестов; не считать будущую строку manage.py работающей.
 Недостающая dependency сообщается как BLOCKED; установка по решению оркестратора.
 
+## Реализовано в T04
+
+- Registry идемпотентно создаёт ровно 50 предзаполненных источников: 9 сайтов и
+  41 Telegram-источник; секреты в Source.config не сохраняются.
+- Публичные adapters Remote OK, Himalayas и Jobicy возвращают NormalizedRecord;
+  сеть ограничена timeout/retry/backoff, а сбой одного источника изолирован.
+- Collector использует DB Lease с heartbeat и fencing, сохраняет cursor только
+  после commit страницы и безопасно возобновляет interrupted run.
+- Известный published_at старше 7 дней отбрасывается на каждой странице и в
+  каждом цикле; неизвестная дата сохраняется. Неверная конфигурация fail-closed.
+- SourceRecord.raw_hash — SHA-256 точного очищенного текста, сохранённого в
+  Vacancy.description; description_permission и source binding задаются
+  adapter-ом и не принимаются из недоверенной записи.
+- Coverage хранит и одновременно показывает window_start, truncated и reason;
+  экран /sources/ не падает на некорректном interval.
+
 ## Реализовано в T01
 
 - HTTP: `/`, `/profile/`, `/sources/`, `/accounts/login/`, POST `/accounts/logout/`.

@@ -14,3 +14,9 @@ class FeatureDispatchTests(SimpleTestCase):
         self.assertEqual(reverse("profile"), "/profile/")
         self.assertEqual(match.url_name, "profile")
         self.assertEqual(match.func.__module__, "jobs.profile.views")
+
+    def test_sources_root_is_delegated_with_compatible_name(self):
+        match = resolve("/sources/")
+        self.assertEqual(reverse("sources"), "/sources/")
+        self.assertEqual(match.url_name, "sources")
+        self.assertEqual(match.func.__module__, "jobs.sources.core.views")

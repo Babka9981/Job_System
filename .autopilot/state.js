@@ -12,7 +12,7 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/IliaF/.codex/skills/autopilot",
   "startedAt": "2026-09-20T15:27:16+03:00",
-  "updatedAt": "2026-09-20T22:10:00+03:00",
+  "updatedAt": "2026-09-21T00:50:00+03:00",
   "finishedAt": null,
   "stages": [
     {"id":"preflight","status":"done","startedAt":"2026-09-20T15:27:16+03:00","finishedAt":"2026-09-20T15:46:44+03:00","note":"Репозиторий и исходные документы проверены"},
@@ -20,11 +20,11 @@ window.STATE =
     {"id":"briefing","status":"done","finishedAt":"2026-09-20T15:46:44+03:00","note":"OpenAI, настраиваемый поиск, CV extraction; search provider уточняется перед T08"},
     {"id":"spec","status":"done","finishedAt":"2026-09-20T15:46:44+03:00","note":"Независимая проверка пройдена"},
     {"id":"plan","status":"done","finishedAt":"2026-09-20T15:46:44+03:00","note":"12 тикетов; реализация ожидает команды"},
-    {"id":"build","status":"active","startedAt":"2026-09-20T16:05:00+03:00","note":"T01–T03 завершены; готова следующая волна"},
+    {"id":"build","status":"active","startedAt":"2026-09-20T16:05:00+03:00","note":"T01–T04 завершены; T07 проходит финальную проверку"},
     {"id":"review","status":"active","startedAt":"2026-09-20T16:40:00+03:00","note":"T01: manifest/spec и craft review"},
     {"id":"final","status":"pending"}
   ],
-  "requirements":{"total":78,"done":19,"inTicket":59,"inSpec":0,"placeholder":0,"deferred":0,"dropped":0},
+  "requirements":{"total":78,"done":23,"inTicket":55,"inSpec":0,"placeholder":0,"deferred":0,"dropped":0},
   "tickets":[
   {
     "id": "01",
@@ -84,6 +84,7 @@ window.STATE =
     "status": "done",
     "startedAt": "2026-09-20T17:36:00+03:00",
     "finishedAt": "2026-09-20T22:10:00+03:00",
+    "commit": "ada9eca",
     "tests": "Django 92/92; Node 6/6; migration drift none",
     "retries": 0,
     "repairs": 2,
@@ -130,6 +131,7 @@ window.STATE =
     "status": "done",
     "startedAt": "2026-09-20T17:36:00+03:00",
     "finishedAt": "2026-09-20T20:40:00+03:00",
+    "commit": "b54f2c7",
     "tests": "T03 28/28; full 85/85; Node 6/6; migration drift none",
     "retries": 1,
     "repairs": 2,
@@ -163,10 +165,13 @@ window.STATE =
       "jobs/templates/sources/",
       "jobs/tests/test_public_sources.py"
     ],
-    "status": "pending",
+    "status": "done",
+    "startedAt": "2026-09-20T22:18:00+03:00",
+    "finishedAt": "2026-09-21T00:50:00+03:00",
+    "tests": "T04 23/23; full Django 137/137; Node 6/6; migration drift none",
     "retries": 0,
-    "repairs": 0,
-    "handoffs": 0,
+    "repairs": 2,
+    "handoffs": 1,
     "githubIssue": "https://github.com/Babka9981/Job_System/issues/4"
   },
   {
@@ -255,10 +260,11 @@ window.STATE =
       "jobs/matching/",
       "jobs/tests/test_matching.py"
     ],
-    "status": "pending",
+    "status": "review",
+    "startedAt": "2026-09-20T22:18:00+03:00",
     "retries": 0,
-    "repairs": 0,
-    "handoffs": 0,
+    "repairs": 2,
+    "handoffs": 2,
     "githubIssue": "https://github.com/Babka9981/Job_System/issues/7"
   },
   {
