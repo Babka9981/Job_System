@@ -1,6 +1,16 @@
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
+
+def positive_env_int(name, default):
+    try:
+        value = int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+    return value if value > 0 else default
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "development-only-secret")
 DEBUG = os.environ.get("DJANGO_DEBUG", "true").lower() == "true"
@@ -67,5 +77,22 @@ X_FRAME_OPTIONS = "DENY"
 SECURE_CONTENT_TYPE_NOSNIFF = True
 PRIVATE_ROOT = BASE_DIR / os.environ.get("JOB_PRIVATE_ROOT", "private")
 TEMPORARY_ROOT = BASE_DIR / os.environ.get("JOB_TEMPORARY_ROOT", "temporary")
+_match_cache_setting = os.environ.get("JOB_MATCH_CACHE_ROOT", "").strip()
+MATCH_CACHE_ROOT = Path(_match_cache_setting) if _match_cache_setting else PRIVATE_ROOT / "matching-cache"
+if not MATCH_CACHE_ROOT.is_absolute():
+    MATCH_CACHE_ROOT = PRIVATE_ROOT / MATCH_CACHE_ROOT
+MATCH_CACHE_ROOT = MATCH_CACHE_ROOT.resolve()
+if not MATCH_CACHE_ROOT.is_relative_to(PRIVATE_ROOT.resolve()):
+    raise ImproperlyConfigured("JOB_MATCH_CACHE_ROOT must be inside JOB_PRIVATE_ROOT")
+if MATCH_CACHE_ROOT.is_relative_to(TEMPORARY_ROOT.resolve()):
+    raise ImproperlyConfigured("JOB_MATCH_CACHE_ROOT must not be inside JOB_TEMPORARY_ROOT")
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+        "LOCATION": str(MATCH_CACHE_ROOT),
+        "TIMEOUT": positive_env_int("JOB_MATCH_CACHE_TIMEOUT_SECONDS", 86400),
+        "OPTIONS": {"MAX_ENTRIES": 10000},
+    }
+}
 OWNER_USERNAME = os.environ.get("JOB_OWNER_USERNAME", "owner")
 USER_TIME_ZONE = os.environ.get("JOB_TIME_ZONE", "Europe/Moscow")

@@ -9,7 +9,10 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 
-@override_settings(OWNER_USERNAME="owner")
+@override_settings(
+    OWNER_USERNAME="owner",
+    CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "security-tests"}},
+)
 class SecurityAndUiTests(TestCase):
     def test_repeated_failed_login_is_rate_limited(self):
         get_user_model().objects.create_user("owner", password="correct")

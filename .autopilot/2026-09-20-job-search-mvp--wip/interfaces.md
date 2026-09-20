@@ -93,6 +93,23 @@ Content permission проверяется до LLM; CV/Search/Jobs недове�
 установки, миграций, запуска и тестов; не считать будущую строку manage.py работающей.
 Недостающая dependency сообщается как BLOCKED; установка по решению оркестратора.
 
+## Реализовано в T07
+
+- evaluate(vacancy, criteria) возвращает Assessment со статусом fit, clarify,
+  reject или pending; hard reject применяется только к доказанным salary/geo
+  ограничениям и явно нерелевантной функции без целевых обязанностей.
+- LLM получает описание только при literal True permission и точном совпадении
+  SHA-256 текущего Vacancy.description с SourceRecord.raw_hash.
+- Salary сравнивает только совместимые fixed, currency, period и basis; unknown,
+  hourly без часов, total comp без fixed и инвертированная вилка дают clarify.
+- Worldwide не доказывает возможность оформления и всегда создаёт отдельный
+  вопрос о праве найма; country и timezone ограничения не смешиваются.
+- Результат неизменённого текста и profile version хранится в durable private
+  cache без повторной оплаты; force обходит cache только после своего lease.
+- Single-flight использует DB Lease: unique create и атомарный conditional
+  takeover истёкшей записи. SQLite lock возвращает pending, release holder-scoped;
+  конкуренты не становятся двумя платными лидерами.
+
 ## Реализовано в T04
 
 - Registry идемпотентно создаёт ровно 50 предзаполненных источников: 9 сайтов и

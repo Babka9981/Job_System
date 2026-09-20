@@ -40,4 +40,8 @@ adapter-confirmed permalink. Permission/evidence флаги принимают �
 Provenance публичного описания: SourceRecord.raw_hash — SHA-256 точного очищенного
 текста, сохранённого в Vacancy.description. Разрешение на LLM не переносится при
 изменении текста и действительно только при literal True вместе с точным hash.
+Matching-кэш долговечен и приватен; ключ включает точный текст вакансии, критерии
+и версию профиля. Платную оценку защищает DB Lease: unique create плюс атомарный
+conditional takeover истёкшей записи; lock/занятый lease дают pending, force не
+возвращает stale cache, release всегда holder-scoped.
 <!-- autopilot:end -->
