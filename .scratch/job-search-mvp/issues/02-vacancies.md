@@ -35,7 +35,11 @@ Blocked by: 01
 - [ ] Список/карточка/поиск/четыре фильтра/пагинация и remote-relocation-freshness порядок работают на сохранённых данных.
 - [ ] Ручное добавление URL/разрешённого текста валидирует provenance/permission и очищает HTML.
 - [ ] Пять user statuses, closing note, hide/unhide и availability независимы; optimistic conflict не теряет данные.
-- [ ] upsert_record идемпотентен по source+id/URL; уверенные cross-source дубли сохраняют ссылки и user state.
+- [ ] upsert_record идемпотентен внутри источника по source+external_id, а без ID —
+  по source+точному URL; cross-source URL сам по себе никогда не merge evidence.
+- [ ] Cross-source merge разрешён только по совпадающему непустому нормализованному
+  содержимому либо adapter-confirmed permalink; manual URL остаётся отдельным до
+  явного подтверждения/adapter evidence, ambiguous всегда no-merge.
 - [ ] Company+title без других доказательств и разные страны/команды не объединяются.
 - [ ] Неизвестные даты/зарплаты/контакты не изобретаются; attr/apply URL видны точно.
 
@@ -51,3 +55,6 @@ Blocked by: 01
 ## Comments
 
 Подготовлен 20.09.2026. Реализация не запускалась.
+
+Amendment 20.09.2026: пользователь подтвердил строгий dedup-контракт после того, как
+сборка доказала небезопасность общей URL-эвристики. Основание D01/G06.

@@ -25,6 +25,26 @@ class SharedSchemaTests(TestCase):
         self.assertEqual(vacancy.salary_min, Decimal("5000.00"))
         self.assertEqual(vacancy.salary_fixed["min"], "5000.00")
 
+    def test_vacancy_keeps_closing_note_and_nullable_last_check_separate(self):
+        vacancy = Vacancy.objects.create(
+            owner=self.owner,
+            title="PM",
+            company="Example",
+            user_note="Личная заметка",
+            closing_note="Отказ работодателя",
+        )
+        self.assertEqual(vacancy.user_note, "Личная заметка")
+        self.assertEqual(vacancy.closing_note, "Отказ работодателя")
+        self.assertIsNone(vacancy.last_checked_at)
+
+    def test_vacancy_priority_is_persisted_and_orders_remote_first(self):
+        for priority in (Vacancy.Priority.OTHER, Vacancy.Priority.REMOTE, Vacancy.Priority.RELOCATION):
+            Vacancy.objects.create(owner=self.owner, title=priority, company="Example", priority=priority)
+        self.assertEqual(
+            list(Vacancy.objects.order_by_priority().values_list("priority", flat=True)),
+            ["remote", "relocation", "other"],
+        )
+
     def test_source_record_identity_is_unique_per_source(self):
         source = Source.objects.create(owner=self.owner, slug="feed", name="Feed", kind="api", adapter="fixture")
         vacancy = Vacancy.objects.create(owner=self.owner, title="PM", company="Example")

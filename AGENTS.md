@@ -32,4 +32,9 @@
 `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run`.
 Django сам не загружает `.env`: production-переменные задаются process manager либо
 в окружении процесса; воспроизводимый `check --deploy` описан в `README.md`.
+
+Dedup вакансий: URL сам по себе никогда не является cross-source evidence. Внутри
+источника identity — `source+external_id`, fallback `source+exact URL`; между
+источниками merge разрешён только по непустому content hash или структурированному
+adapter-confirmed permalink. Permission/evidence флаги принимают только literal `True`.
 <!-- autopilot:end -->

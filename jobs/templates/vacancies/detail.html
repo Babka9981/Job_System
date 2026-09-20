@@ -1,0 +1,37 @@
+{% extends "shared/app_shell.html" %}
+{% load tz %}
+{% block content %}
+<style>
+.vacancy-detail-stack{display:grid;gap:1rem}.vacancy-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(12rem,100%),1fr));gap:1rem}.vacancy-facts p{margin:0}.vacancy-section{margin-top:1.25rem}.vacancy-forms{margin-top:1rem}.vacancy-forms select,.vacancy-forms textarea{width:100%;min-width:0;padding:.65rem .75rem;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-canvas);color:var(--text-primary)}.vacancy-forms form+form{margin-top:1rem}.vacancy-note{margin-top:1rem}.structured-value{overflow-wrap:anywhere;color:var(--text-secondary)}
+</style>
+<div class="vacancy-detail-stack">
+{% include "shared/page_heading.html" with heading=title description=vacancy.company %}
+{% if state == "conflict" %}{% include "shared/states.html" with state="conflict" %}{% endif %}
+{% if error %}<div class="feedback-banner tone-danger" role="alert">{{ error }}</div>{% endif %}
+<article class="ui-card">
+  <div class="vacancy-facts">
+  <p><strong>Статус</strong><br>{{ vacancy.get_user_status_display }}</p>
+  <p><strong>Доступность</strong><br>{{ vacancy.get_availability_display }}</p>
+  <p><strong>Роль</strong><br>{{ vacancy.role|default:"Не указана" }}</p>
+  <p><strong>Отрасль</strong><br>{{ vacancy.industry|default:"Не указана" }}</p>
+  <p><strong>Формат</strong><br>{{ vacancy.work_arrangement|default:"Не указан" }}</p>
+  <p><strong>Страны</strong><br>{% for item in vacancy.country_restrictions %}{{ item }}{% if not forloop.last %}, {% endif %}{% empty %}Не указаны{% endfor %}</p>
+  <p><strong>Часовые пояса</strong><br>{% for item in vacancy.timezone_restrictions %}{{ item }}{% if not forloop.last %}, {% endif %}{% empty %}Не указаны{% endfor %}</p>
+  <p><strong>Язык</strong><br>{{ vacancy.language|default:"Не указан" }}</p>
+  <p><strong>Опубликована</strong><br>{{ vacancy.published_at|timezone:user_time_zone|date:"d.m.Y H:i"|default:"Дата неизвестна" }}</p>
+  <p><strong>Первая находка</strong><br>{{ vacancy.first_seen_at|timezone:user_time_zone|date:"d.m.Y H:i" }}</p>
+  <p><strong>Последняя проверка</strong><br>{{ vacancy.last_checked_at|timezone:user_time_zone|date:"d.m.Y H:i"|default:"Не выполнялась" }}</p>
+  </div>
+  <section class="vacancy-section"><h2>Оплата</h2>{% if vacancy.salary_min or vacancy.salary_max or vacancy.salary_original or vacancy.salary_fixed or vacancy.salary_bonus or vacancy.salary_equity_tokens %}{% if vacancy.salary_min or vacancy.salary_max %}<p>{{ vacancy.salary_min|default:"?" }}–{{ vacancy.salary_max|default:"?" }} {{ vacancy.salary_currency|default:"валюта не указана" }} / {{ vacancy.salary_period|default:"период не указан" }}; {{ vacancy.salary_basis|default:"gross/net не указан" }}; состав: {{ vacancy.salary_component|default:"не указан" }}</p>{% endif %}{% if vacancy.salary_fixed %}<p class="structured-value"><strong>Фикс:</strong> {{ vacancy.salary_fixed }}</p>{% endif %}{% if vacancy.salary_bonus %}<p class="structured-value"><strong>Бонус:</strong> {{ vacancy.salary_bonus }}</p>{% endif %}{% if vacancy.salary_equity_tokens %}<p class="structured-value"><strong>Доли/токены:</strong> {{ vacancy.salary_equity_tokens }}</p>{% endif %}{% if vacancy.salary_original %}<p class="structured-value"><strong>Как в источнике:</strong> {{ vacancy.salary_original }}</p>{% endif %}{% else %}<p>Не указана</p>{% endif %}</section>
+  {% if vacancy.contact %}<p><strong>Контакт из объявления:</strong> {{ vacancy.contact }}</p>{% endif %}
+  {% if vacancy.description %}<section class="vacancy-section"><h2>Исходный текст</h2><div>{{ vacancy.description|linebreaksbr }}</div></section>{% endif %}
+  <section class="vacancy-section"><h2>Оценка и вопросы</h2><p>Оценка соответствия ещё не выполнена. Неизвестные условия не считаются отрицательным ответом.</p></section>
+  <section class="vacancy-section"><h2>Ссылки и атрибуция</h2><ul>{% for record in vacancy.source_records.all %}<li><a href="{{ record.canonical_url }}" target="_blank" rel="noopener noreferrer">{{ record.source.name }} — исходная вакансия</a>{% if record.apply_url %} · <a href="{{ record.apply_url }}" target="_blank" rel="noopener noreferrer">Откликнуться</a>{% endif %}{% if record.attribution.label %} · {{ record.attribution.label }}{% endif %}</li>{% empty %}<li>Ссылки источника отсутствуют.</li>{% endfor %}</ul></section>
+</article>
+<div class="field-grid vacancy-forms">
+  <section class="ui-card"><h2>Статус</h2><form method="post" action="{% url 'vacancy-status' vacancy.id %}" class="form-stack">{% csrf_token %}<input type="hidden" name="version" value="{{ vacancy.version }}"><div><label for="status">Статус</label><select id="status" name="status">{% for value,label in statuses %}<option value="{{ value }}"{% if form_values.status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div><div><label for="closing-note">Причина закрытия</label><textarea id="closing-note" name="note" rows="3" aria-describedby="closing-note-help">{{ form_values.closing_note }}</textarea><small id="closing-note-help">Обязательна для статуса «Закрыта».</small></div><button class="button button-primary" type="submit">Сохранить статус</button></form></section>
+  <section class="ui-card"><h2>Актуальность</h2><form method="post" action="{% url 'vacancy-availability' vacancy.id %}" class="form-stack">{% csrf_token %}<input type="hidden" name="version" value="{{ vacancy.version }}"><div><label for="availability">Состояние объявления</label><select id="availability" name="availability">{% for value,label in availability_choices %}<option value="{{ value }}"{% if form_values.availability == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div><button class="button button-primary" type="submit">Сохранить актуальность</button></form><form method="post" action="{% url 'vacancy-visibility' vacancy.id %}">{% csrf_token %}<input type="hidden" name="version" value="{{ vacancy.version }}"><input type="hidden" name="hidden" value="{% if vacancy.hidden %}0{% else %}1{% endif %}"><button class="button button-secondary" type="submit">{% if vacancy.hidden %}Вернуть в список{% else %}Скрыть вакансию{% endif %}</button></form></section>
+</div>
+<section class="ui-card vacancy-note vacancy-forms"><h2>Моя заметка</h2><form method="post" action="{% url 'vacancy-note' vacancy.id %}" class="form-stack">{% csrf_token %}<input type="hidden" name="version" value="{{ vacancy.version }}"><div><label for="user-note">Заметка</label><textarea id="user-note" name="user_note" rows="5">{{ form_values.user_note }}</textarea></div><button class="button button-primary" type="submit">Сохранить заметку</button></form></section>
+</div>
+{% endblock %}

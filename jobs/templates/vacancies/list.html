@@ -1,0 +1,34 @@
+{% extends "shared/app_shell.html" %}
+{% load tz %}
+{% block content %}
+<style>
+.vacancy-stack{display:grid;gap:1rem}.vacancy-toolbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(10rem,100%),1fr));gap:1rem;align-items:end}.vacancy-field{display:grid;gap:.35rem}.vacancy-field label{font-weight:700}.vacancy-field input,.vacancy-field select,.vacancy-field textarea,.form-stack textarea{width:100%;min-width:0;padding:.65rem .75rem;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-canvas);color:var(--text-primary)}.vacancy-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(22rem,100%),1fr));gap:1rem}.vacancy-card{display:grid;gap:.75rem;align-content:start}.vacancy-card h2{margin:0;overflow-wrap:anywhere}.vacancy-meta{display:flex;flex-wrap:wrap;gap:.5rem}.vacancy-data{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(9rem,100%),1fr));gap:.75rem}.vacancy-data p{margin:0}.vacancy-pagination{display:flex;align-items:center;justify-content:center;gap:.75rem;flex-wrap:wrap}.manual-vacancy{margin-top:1.5rem}.manual-vacancy summary{cursor:pointer;font-weight:800;padding:.25rem}.manual-vacancy form{margin-top:1rem}
+</style>
+<div class="vacancy-stack">
+{% include "shared/page_heading.html" with heading="Вакансии" description="Сохранённые и добавленные вручную объявления" %}
+{% if manual_form.errors %}<div class="feedback-banner tone-danger" role="alert">Проверьте данные формы.</div>{% endif %}
+<form method="get" class="ui-card vacancy-toolbar" aria-label="Поиск и фильтры вакансий">
+  <div class="vacancy-field"><label for="vacancy-q">Поиск</label><input id="vacancy-q" name="q" value="{{ filters.q }}" placeholder="Название, компания или текст"></div>
+  <div class="vacancy-field"><label for="vacancy-role">Роль</label><select id="vacancy-role" name="role"><option value="">Все роли</option>{% for item in roles %}<option value="{{ item }}"{% if filters.role == item %} selected{% endif %}>{{ item }}</option>{% endfor %}</select></div>
+  <div class="vacancy-field"><label for="vacancy-source">Источник</label><select id="vacancy-source" name="source"><option value="">Все источники</option>{% for item in sources %}<option value="{{ item.slug }}"{% if filters.source == item.slug %} selected{% endif %}>{{ item.name }}</option>{% endfor %}</select></div>
+  <div class="vacancy-field"><label for="vacancy-priority">Приоритет</label><select id="vacancy-priority" name="priority"><option value="">Все</option>{% for value,label in priorities %}<option value="{{ value }}"{% if filters.priority == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+  <div class="vacancy-field"><label for="vacancy-status">Статус</label><select id="vacancy-status" name="status"><option value="">Все</option>{% for value,label in statuses %}<option value="{{ value }}"{% if filters.status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+  <div class="vacancy-field"><label for="vacancy-visibility">Видимость</label><select id="vacancy-visibility" name="visibility"><option value="visible"{% if filters.visibility == "visible" %} selected{% endif %}>Только видимые</option><option value="hidden"{% if filters.visibility == "hidden" %} selected{% endif %}>Только скрытые</option><option value="all"{% if filters.visibility == "all" %} selected{% endif %}>Все</option></select></div>
+  <button class="button button-primary" type="submit">Применить</button><a class="button button-secondary" href="{% url 'vacancies' %}">Сбросить</a>
+</form>
+{% if page_obj.object_list %}
+<section class="vacancy-grid" aria-label="Список вакансий">
+  {% for vacancy in page_obj %}<article class="ui-card vacancy-card">
+    <div><h2><a href="{% url 'vacancy-detail' vacancy.id %}">{{ vacancy.title|default:"Название не указано" }}</a></h2><p>{{ vacancy.company|default:"Компания не указана" }}</p></div>
+    <div class="vacancy-meta"><span class="status-badge">{{ vacancy.get_priority_display }}</span><span class="status-badge">{{ vacancy.get_user_status_display }}</span><span class="status-badge">{{ vacancy.get_availability_display }}</span>{% if vacancy.hidden %}<span class="status-badge">Скрыта</span>{% endif %}</div>
+    <div class="vacancy-data"><p><strong>Роль</strong><br>{{ vacancy.role|default:"Не указана" }}</p><p><strong>Формат</strong><br>{{ vacancy.work_arrangement|default:"Не указан" }}</p><p><strong>Оплата</strong><br>{% if vacancy.salary_min or vacancy.salary_max %}{{ vacancy.salary_min|default:"?" }}–{{ vacancy.salary_max|default:"?" }} {{ vacancy.salary_currency }}{% else %}Не указана{% endif %}</p><p><strong>Опубликована</strong><br>{{ vacancy.published_at|timezone:user_time_zone|date:"d.m.Y"|default:"Дата неизвестна" }}</p></div>
+    <div class="action-group"><a class="button button-secondary" href="{% url 'vacancy-detail' vacancy.id %}">Открыть карточку</a>{% with record=vacancy.source_records.all|first %}{% if record %}<a class="button button-secondary" href="{{ record.canonical_url }}" target="_blank" rel="noopener noreferrer">Источник</a>{% endif %}{% endwith %}</div>
+  </article>{% endfor %}
+</section>
+{% else %}
+{% include "shared/states.html" with state="empty" state_title="Вакансий не найдено" state_message="Измените фильтры или добавьте вакансию вручную." %}
+{% endif %}
+{% if page_obj.paginator.num_pages > 1 %}<nav class="vacancy-pagination" aria-label="Страницы вакансий">{% if page_obj.has_previous %}<a class="button button-secondary" href="?{% if query_without_page %}{{ query_without_page }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">Назад</a>{% endif %}<span>Страница {{ page_obj.number }} из {{ page_obj.paginator.num_pages }}</span>{% if page_obj.has_next %}<a class="button button-secondary" href="?{% if query_without_page %}{{ query_without_page }}&amp;{% endif %}page={{ page_obj.next_page_number }}">Далее</a>{% endif %}</nav>{% endif %}
+<details class="ui-card manual-vacancy"><summary>Добавить вакансию вручную</summary><form method="post" action="{% url 'vacancy-add' %}" class="form-stack">{% csrf_token %}{{ manual_form.as_div }}<button class="button button-primary" type="submit">Добавить вакансию</button></form></details>
+</div>
+{% endblock %}

@@ -57,11 +57,27 @@ class Source(TimestampedModel):
     class Meta:
         constraints = [models.UniqueConstraint(fields=["owner", "slug"], name="unique_source_slug_per_owner")]
 
+class VacancyQuerySet(models.QuerySet):
+    def order_by_priority(self):
+        priority_rank = models.Case(
+            models.When(priority="remote", then=models.Value(0)),
+            models.When(priority="relocation", then=models.Value(1)),
+            default=models.Value(2),
+            output_field=models.PositiveSmallIntegerField(),
+        )
+        return self.alias(_priority_rank=priority_rank).order_by("_priority_rank")
+
+
 class Vacancy(TimestampedModel):
     class UserStatus(models.TextChoices):
         NEW="new","Новая"; SAVED="saved","Сохранена"; APPLIED="applied","Откликнулся"; INTERVIEW="interview","Интервью"; CLOSED="closed","Закрыта"
     class Availability(models.TextChoices):
         UNKNOWN="unknown","Неизвестна"; ACTIVE="active","Активна"; REMOVED="removed","Снята"
+    class Priority(models.TextChoices):
+        REMOTE = "remote", "Удалённая"
+        RELOCATION = "relocation", "Релокация"
+        OTHER = "other", "Остальное"
+    objects = VacancyQuerySet.as_manager()
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="vacancies")
     title = models.CharField(max_length=300)
     company = models.CharField(max_length=300)
@@ -86,24 +102,39 @@ class Vacancy(TimestampedModel):
     contact = models.CharField(max_length=255, blank=True)
     published_at = models.DateTimeField(null=True, blank=True)
     first_seen_at = models.DateTimeField(auto_now_add=True)
+    last_checked_at = models.DateTimeField(null=True, blank=True)
+    priority = models.CharField(max_length=16, choices=Priority, default=Priority.OTHER)
     user_status = models.CharField(max_length=16, choices=UserStatus, default=UserStatus.NEW)
     availability = models.CharField(max_length=16, choices=Availability, default=Availability.UNKNOWN)
     hidden = models.BooleanField(default=False)
     user_note = models.TextField(blank=True)
+    closing_note = models.TextField(blank=True)
     version = models.PositiveIntegerField(default=1)
 
 class SourceRecord(TimestampedModel):
     source = models.ForeignKey(Source, on_delete=models.CASCADE, related_name="records")
     vacancy = models.ForeignKey(Vacancy, on_delete=models.CASCADE, related_name="source_records")
-    external_id = models.CharField(max_length=255)
+    external_id = models.CharField(max_length=255, blank=True)
     canonical_url = models.URLField(max_length=1000)
     apply_url = models.URLField(max_length=1000, blank=True)
     raw_hash = models.CharField(max_length=128)
+    adapter_confirmed_permalink = models.BooleanField(default=False)
     description_permission = models.BooleanField(default=False)
     expires_at = models.DateTimeField(null=True, blank=True)
     attribution = models.JSONField(default=dict, blank=True)
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["source", "external_id"], name="unique_external_id_per_source")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source", "external_id"],
+                condition=~models.Q(external_id=""),
+                name="uniq_source_extid_nonempty",
+            ),
+            models.UniqueConstraint(
+                fields=["source", "canonical_url"],
+                condition=models.Q(external_id=""),
+                name="uniq_source_url_no_extid",
+            ),
+        ]
 
 class TemporarySourceContent(TimestampedModel):
     source_record = models.OneToOneField(SourceRecord, on_delete=models.CASCADE, related_name="temporary_content")

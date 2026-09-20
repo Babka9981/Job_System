@@ -55,12 +55,22 @@ Cursor — opaque, сохраняется после commit обработанн
 
 ## Handoff волны 2
 
-- T02 provisional (не landed, retry exhausted): Vacancy дополняется `closing_note`, nullable `last_checked_at` и `priority`:
+- T02 implemented: Vacancy дополнена `closing_note`, nullable `last_checked_at` и `priority`:
   `remote | relocation | other`; приоритет независим от будущей оценки matching,
   сортировка `remote > relocation > other`.
-- Core URL dispatcher пока сохраняет T01 placeholder для вакансий; профиль делегируется
-  в `jobs.profile.urls` с сохранением shell route name.
+- Core URL dispatcher делегирует вакансии в `jobs.vacancies.urls`, профиль —
+  в `jobs.profile.urls`, сохраняя shell route names.
 - PDF extraction использует `pypdf==6.19.0`; OpenAI gateway остаётся в зоне profile.
+
+## T02 revision 1 — подтверждённый dedup
+
+- Same-source identity: `source + external_id`; fallback без ID: `source + exact URL`.
+- Cross-source URL никогда не является evidence сам по себе.
+- Cross-source merge: только одинаковый непустой normalized content hash либо
+  `adapter_confirmed_permalink=true` от конкретного source adapter.
+- Manual URL не auto-merge; ambiguous всегда создаёт отдельную Vacancy.
+- `SourceRecord.adapter_confirmed_permalink` и `description_permission` принимают
+  только literal `True`; при смене URL/контента прежнее разрешение не переносится.
 
 ## Долгоживущие состояния
 
