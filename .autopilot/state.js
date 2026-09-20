@@ -12,7 +12,7 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/IliaF/.codex/skills/autopilot",
   "startedAt": "2026-09-20T15:27:16+03:00",
-  "updatedAt": "2026-09-20T17:30:00+03:00",
+  "updatedAt": "2026-09-20T20:40:00+03:00",
   "finishedAt": null,
   "stages": [
     {"id":"preflight","status":"done","startedAt":"2026-09-20T15:27:16+03:00","finishedAt":"2026-09-20T15:46:44+03:00","note":"Репозиторий и исходные документы проверены"},
@@ -20,11 +20,11 @@ window.STATE =
     {"id":"briefing","status":"done","finishedAt":"2026-09-20T15:46:44+03:00","note":"OpenAI, настраиваемый поиск, CV extraction; search provider уточняется перед T08"},
     {"id":"spec","status":"done","finishedAt":"2026-09-20T15:46:44+03:00","note":"Независимая проверка пройдена"},
     {"id":"plan","status":"done","finishedAt":"2026-09-20T15:46:44+03:00","note":"12 тикетов; реализация ожидает команды"},
-    {"id":"build","status":"active","startedAt":"2026-09-20T16:05:00+03:00","note":"T01 завершён; готова волна T02/T03"},
+    {"id":"build","status":"active","startedAt":"2026-09-20T16:05:00+03:00","note":"T03 завершён; T02 failed после исчерпания repair/retry, downstream blocked"},
     {"id":"review","status":"active","startedAt":"2026-09-20T16:40:00+03:00","note":"T01: manifest/spec и craft review"},
     {"id":"final","status":"pending"}
   ],
-  "requirements":{"total":76,"done":1,"inTicket":75,"inSpec":0,"placeholder":0,"deferred":0,"dropped":0},
+  "requirements":{"total":76,"done":6,"inTicket":58,"inSpec":0,"placeholder":12,"deferred":0,"dropped":0},
   "tickets":[
   {
     "id": "01",
@@ -48,8 +48,9 @@ window.STATE =
     "status": "done",
     "startedAt": "2026-09-20T16:05:00+03:00",
     "finishedAt": "2026-09-20T17:30:00+03:00",
+    "commit": "4bbc3dc",
     "tests": "Django 19/19; Node drawer 4/4; deploy check 0; migration drift none",
-    "retries": 1,
+    "retries": 2,
     "repairs": 2,
     "handoffs": 0,
     "githubIssue": "https://github.com/Babka9981/Job_System/issues/1"
@@ -80,10 +81,12 @@ window.STATE =
       "jobs/templates/vacancies/",
       "jobs/tests/test_vacancies.py"
     ],
-    "status": "pending",
-    "retries": 0,
-    "repairs": 0,
-    "handoffs": 0,
+    "status": "failed",
+    "startedAt": "2026-09-20T17:36:00+03:00",
+    "retries": 2,
+    "repairs": 2,
+    "handoffs": 1,
+    "failure": "URL dedup classifier остаётся слишком широким для generic job/search/category paths; лимит repair/retry исчерпан",
     "githubIssue": "https://github.com/Babka9981/Job_System/issues/2"
   },
   {
@@ -120,10 +123,13 @@ window.STATE =
       "jobs/tests/test_profile.py",
       "jobs/tests/test_budget.py"
     ],
-    "status": "pending",
-    "retries": 0,
-    "repairs": 0,
-    "handoffs": 0,
+    "status": "done",
+    "startedAt": "2026-09-20T17:36:00+03:00",
+    "finishedAt": "2026-09-20T20:40:00+03:00",
+    "tests": "T03 28/28; full 85/85; Node 6/6; migration drift none",
+    "retries": 1,
+    "repairs": 2,
+    "handoffs": 1,
     "githubIssue": "https://github.com/Babka9981/Job_System/issues/3"
   },
   {

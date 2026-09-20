@@ -17,6 +17,16 @@ class FrontendContractTests(SimpleTestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_form_submit_behavior_regressions(self):
+        result = subprocess.run(
+            ["node", "--test", "jobs/static/ui/tests/form-submit.test.cjs"],
+            cwd=settings.BASE_DIR,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_dark_primary_button_contrast_is_wcag_aa(self):
         css = (Path(settings.BASE_DIR) / "jobs/static/ui/tokens.css").read_text(encoding="utf-8")
         dark = re.search(r':root\[data-theme=dark\]\{([^}]*)\}', css).group(1)
@@ -37,3 +47,11 @@ class FrontendContractTests(SimpleTestCase):
         self.assertNotRegex(css, r'https?://')
         self.assertIn("ui/fonts.css", base)
         self.assertTrue((Path(settings.BASE_DIR) / "jobs/static/ui/fonts/Inter.var.ttf").is_file())
+
+    def test_generic_form_control_contract_covers_selects_and_textareas(self):
+        css = (Path(settings.BASE_DIR) / "jobs/static/ui/app.css").read_text(encoding="utf-8")
+        self.assertIn(".form-control{", css)
+        self.assertIn("min-height:2.75rem", css)
+        self.assertIn("border:1px solid var(--border-strong)", css)
+        self.assertIn("background:var(--surface-canvas)", css)
+        self.assertIn("textarea.form-control{resize:vertical}", css)

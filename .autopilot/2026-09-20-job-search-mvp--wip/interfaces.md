@@ -53,6 +53,15 @@ salary{min?,max?,currency?,period?,basis?,component?,fixed{min?,max?,currency?,p
 Batch: records[], next_cursor?, coverage{window_start?,truncated,reason?}, provider_updated_at?.
 Cursor — opaque, сохраняется после commit обработанной страницы.
 
+## Handoff волны 2
+
+- T02 provisional (не landed, retry exhausted): Vacancy дополняется `closing_note`, nullable `last_checked_at` и `priority`:
+  `remote | relocation | other`; приоритет независим от будущей оценки matching,
+  сортировка `remote > relocation > other`.
+- Core URL dispatcher пока сохраняет T01 placeholder для вакансий; профиль делегируется
+  в `jobs.profile.urls` с сохранением shell route name.
+- PDF extraction использует `pypdf==6.19.0`; OpenAI gateway остаётся в зоне profile.
+
 ## Долгоживущие состояния
 
 User status: new/saved/applied/interview/closed; hidden отдельно.

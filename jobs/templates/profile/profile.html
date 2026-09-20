@@ -1,0 +1,67 @@
+{% extends "shared/app_shell.html" %}
+{% block content %}
+<header class="page-heading">
+  <div><h1>Мой профиль</h1><p>Проверяйте факты из CV и управляйте критериями поиска и откликов.</p></div>
+  <span class="status-badge">{% if profile.confirmed_version %}Проверен · версия {{ profile.confirmed_version }}{% else %}Не подтверждён{% endif %}</span>
+</header>
+
+{% for message in messages %}<div class="feedback-banner tone-{% if message.tags == 'error' %}danger{% else %}{{ message.tags|default:'neutral' }}{% endif %}" {% if message.tags == 'error' %}role="alert"{% else %}role="status" aria-live="polite"{% endif %}>{{ message }}</div>{% endfor %}
+
+<div class="form-stack">
+  <section class="ui-card" aria-labelledby="resume-heading">
+    <h2 id="resume-heading">Резюме</h2>
+    <p>PDF/DOCX хранится приватно. Извлечённые LLM факты всегда остаются черновиком до вашей проверки.</p>
+    <form method="post" enctype="multipart/form-data" action="{% url 'profile-upload' %}" class="form-stack" data-disable-on-submit>
+      {% csrf_token %}{% include "profile/form_fields.html" with form=upload_form %}
+      <div class="action-group"><button class="button button-primary" type="submit">Загрузить резюме</button></div>
+    </form>
+    {% if resumes %}
+    <div class="table-container"><table><thead><tr><th>Дата</th><th>Статус текста</th><th>Действие</th></tr></thead><tbody>
+      {% for resume in resumes %}<tr><td>{{ resume.created_at|date:"d.m.Y H:i" }}</td><td>{{ resume.get_extraction_state_display }}</td><td>
+        {% if resume.extraction_state == 'complete' %}<details><summary>Проверить извлечённый текст</summary><pre>{{ resume.text }}</pre></details><form method="post" action="{% url 'profile-extract' resume.id %}" data-disable-on-submit>{% csrf_token %}<button class="button button-secondary" type="submit">Создать LLM-черновик</button></form>{% else %}<details><summary>Вставить текст CV</summary><form method="post" action="{% url 'profile-resume-text' resume.id %}" class="form-stack" data-disable-on-submit>{% csrf_token %}<div><label for="resume-text-{{ resume.id }}">Текст резюме</label><textarea class="form-control" id="resume-text-{{ resume.id }}" name="text" rows="8" maxlength="200000" required></textarea><small>Разделяйте смысловые блоки пустой строкой.</small></div><button class="button button-primary" type="submit">Сохранить текст</button></form></details>{% endif %}
+      </td></tr>{% endfor %}
+    </tbody></table></div>
+    {% endif %}
+  </section>
+
+  {% if draft %}
+  <section class="ui-card" aria-labelledby="draft-heading">
+    <h2 id="draft-heading">Неподтверждённый черновик · версия {{ draft.proposed_version }}</h2>
+    <div class="feedback-banner tone-warning" role="status">LLM-результат недоверенный. Исправьте неточности и подтвердите только проверенные факты.</div>
+    <form method="post" action="{% url 'profile-confirm' %}" class="form-stack" data-disable-on-submit>
+      {% csrf_token %}<input type="hidden" name="version" value="{{ profile.version }}"><input type="hidden" name="proposed_version" value="{{ draft.proposed_version }}"><input type="hidden" name="draft_token" value="{{ draft.token }}">
+      <div><label for="draft-about">Обо мне</label><textarea class="form-control" id="draft-about" name="about" rows="5">{{ draft.about }}</textarea></div>
+      {% for fact in draft.facts %}<div><label for="draft-fact-{{ fact.id }}">{{ fact.kind }} · {{ fact.source }}</label><textarea class="form-control" id="draft-fact-{{ fact.id }}" name="fact_{{ fact.id }}" rows="3">{{ fact.text }}</textarea></div>{% endfor %}
+      {% if draft.questions %}<div class="feedback-banner tone-info"><strong>Нужно уточнить:</strong><ul>{% for question in draft.questions %}<li>{{ question }}</li>{% endfor %}</ul></div>{% endif %}
+      <div class="action-group"><button class="button button-primary" type="submit">Подтвердить проверенный профиль</button></div>
+    </form>
+  </section>
+  {% endif %}
+
+  {% if unresolved_questions %}
+  <section class="ui-card" aria-labelledby="questions-heading">
+    <h2 id="questions-heading">Требуют решения</h2>
+    <div class="feedback-banner tone-warning" role="status">Эти вопросы и отклонённые сведения не подтверждены и не используются как факты профиля.</div>
+    <ul>{% for question in unresolved_questions %}<li>{{ question.text }}</li>{% endfor %}</ul>
+  </section>
+  {% endif %}
+
+  <section class="ui-card" aria-labelledby="manual-heading">
+    <h2 id="manual-heading">Проверенный профиль вручную</h2>
+    <p>Можно заполнить и подтвердить профиль без файла CV.</p>
+    <form method="post" action="{% url 'profile-manual' %}" class="form-stack" data-disable-on-submit>
+      {% csrf_token %}{% include "profile/form_fields.html" with form=manual_form %}
+      <div class="action-group"><button class="button button-primary" type="submit">Сохранить и подтвердить</button></div>
+    </form>
+  </section>
+
+  <section class="ui-card" aria-labelledby="settings-heading">
+    <h2 id="settings-heading">Критерии и настройки</h2>
+    <p>Basis «Не определено» отключает жёсткий salary-фильтр. Расписание не включается без часового пояса. Нулевой бюджет отключает платные вызовы.</p>
+    <form method="post" action="{% url 'profile-settings' %}" class="form-stack" data-disable-on-submit>
+      {% csrf_token %}<div class="field-grid">{% include "profile/form_fields.html" with form=settings_form %}</div>
+      <div class="action-group"><button class="button button-primary" type="submit">Сохранить настройки</button></div>
+    </form>
+  </section>
+</div>
+{% endblock %}

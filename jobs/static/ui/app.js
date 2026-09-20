@@ -1,4 +1,5 @@
 (() => {
+  globalThis.JobForms?.bindDisableOnSubmit(document);
   const root = document.documentElement;
   const storedTheme = () => { try { return localStorage.getItem("theme"); } catch (_) { return null; } };
   const effectiveTheme = () => storedTheme() || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
