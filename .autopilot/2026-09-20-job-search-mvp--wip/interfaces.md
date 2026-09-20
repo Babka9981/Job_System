@@ -1,0 +1,75 @@
+# Контракты для начала разработки
+
+Статус: проект, реализации нет. После команды пользователя T01 закрепляет эти границы
+в коде; изменения контракта согласуются до запуска зависимых тикетов.
+
+## Границы, решённые в спецификации
+
+
+| Модуль | Владеет | Публичная граница | Скрывает |
+|---|---|---|---|
+| core | owner/auth, schema и migration ordering, shared UI | Django auth + ORM сущности | storage/settings/session |
+| profile | CV, факты, criteria, version | extract_profile(resume), confirm_profile(draft, version) | parsers/OpenAI prompts |
+| vacancies | карточка, источники-ссылки, user state | upsert_record(record), change_status(id, version, status, note) | merge/dedup |
+| sources | adapter contract, registry, cursors, TTL | collect(source, cursor) -> Batch(records,next_cursor,coverage) | HTTP/MCP/Telegram |
+| matching | structured match, salary/geo decisions | evaluate(vacancy, criteria) -> Assessment | rules/prompts |
+| intelligence | OpenAI client, budget, public fetch/search, research/drafts | research(company,domain,role,refresh), generate(vacancy,profile,kind) | network/cache/prompts |
+| monitoring | schedule, lease, runs, digest outbox | run_cycle(), deliver_digest(run) | timer/retries/bot |
+| operations | compose/HTTPS/backup/cleanup | CLI documented commands | platform details |
+
+Shared model contract T01: Owner via Django User; Profile(version,confirmed_version,
+about,criteria,preferences); Resume(private_path,text,extraction_state); ProfileFact
+(text,kind,source/page,profile_version,confirmed); Source(kind,adapter,config without secrets,
+status,enabled,last_success,cursor,coverage,llm_permission); Vacancy(normalized fields,
+user_status,availability,version); SourceRecord(source,external_id,URL,hash,permission,
+expiry); Research(company,domain,role coverage,status,facts,sources,expires_at);
+Draft(kind,text,profile_version,research,status,provenance); Run/Lease;
+UsageReservation/Ledger; NotificationOutbox. Dates UTC in DB, user timezone in UI.
+Temporary source content physically segregated for backup exclusion.
+
+Tests at public service boundaries and Django HTTP, providers replaced by fixtures.
+Core alone owns initial schema and migration registry; later model changes serialised
+through owner before waves. UI partials shared, feature pages owned by feature tickets.
+Dependency absent => report BLOCKED, do not invent success.
+
+
+## Уточнение ownership
+
+T03 владеет общими OpenAI gateway и Budget API, T07 переиспользует их;
+T08 владеет search/fetch/research, T09 — генерацией. T04 владеет registry/collector,
+T05 — keyed/RVC adapters, T06 — Telegram reader. T10 вызывает collector и notification bot.
+Общие urls/template navigation/модели и migration numbering меняет владелец core
+последовательно, а feature-specific handlers/tests/partials — соответствующий тикет.
+
+## Формат записи источника
+
+NormalizedRecord: source_slug, external_id, canonical_url, apply_url, title, company,
+company_domain?, description?, description_permission, published_at?, expires_at?,
+language?, role?, industry?, work_arrangement?, country_restrictions[], timezone_restrictions[],
+salary{min?,max?,currency?,period?,basis?,component?,fixed{min?,max?,currency?,period?,basis?}?,bonus{value?,description?}?,equity_tokens{value?,description?}?}, contact?, raw_hash, attribution.
+Каждая составляющая хранится отдельно; total не подменяет fixed. Неуказанные значения
+остаются unknown. Исходное описание состава оплаты сохраняется для проверки.
+Вопросительный знак означает unknown, не приглашение вывести значение из догадки.
+Batch: records[], next_cursor?, coverage{window_start?,truncated,reason?}, provider_updated_at?.
+Cursor — opaque, сохраняется после commit обработанной страницы.
+
+## Долгоживущие состояния
+
+User status: new/saved/applied/interview/closed; hidden отдельно.
+Availability: unknown/active/removed. Match: pending/fit/clarify/reject/error.
+Research: pending/running/complete/partial/unavailable/needs-domain.
+Draft: editing/generated/limited/error. Delivery: pending/sent/failed/uncertain.
+Статусы «ошибка» и «0 вакансий» никогда не объединяются.
+
+## Инварианты реализации
+
+UTC хранение и timezone display. Decimal для денег. Отдельно source content и user notes.
+Content permission проверяется до LLM; CV/Search/Jobs недоверенные данные без tool authority.
+Ошибки upstream содержат код/безопасное описание, не credentials или полный ответ.
+Использовать existing design-system как единственный набор токенов.
+
+## Команды
+
+Команды приложения пока отсутствуют. T01 должен создать и проверить реальные команды
+установки, миграций, запуска и тестов; не считать будущую строку manage.py работающей.
+Недостающая dependency сообщается как BLOCKED; установка по решению оркестратора.
