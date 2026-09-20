@@ -1,4 +1,7 @@
 import hashlib
+import os
+import tempfile
+from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError
@@ -9,9 +12,10 @@ from urllib.error import HTTPError
 from unittest.mock import patch
 
 from jobs.models.models import Lease, Source, SourceRecord, Vacancy
-from jobs.sources.core.collector import CollectorBusy, collect_sources
+from jobs.sources.core.collector import CollectorBusy, collect_sources, default_adapters
 from jobs.sources.core.contracts import Batch, Coverage, SourceCollectionError
 from jobs.sources.core.registry import seed_sources
+from jobs.sources.keyed.remote_rocketship import TemporaryRocketshipStore
 from jobs.sources.public.remote_ok import RemoteOkAdapter
 from jobs.sources.public.himalayas import HimalayasAdapter
 from jobs.sources.public.jobicy import JobicyAdapter
@@ -80,6 +84,45 @@ class SourceRegistryTests(TestCase):
         self.assertEqual(existing.status, Source.Status.LIMITED)
         self.assertFalse(existing.enabled)
         self.assertEqual(existing.config["last_error"]["code"], "rate_limit")
+        rocketship = Source.objects.get(owner=self.owner, slug="remote-rocketship")
+        self.assertEqual(rocketship.config["service_interval_seconds"], 14400)
+
+    def test_default_adapters_expose_keyed_sources_and_inject_rvc_tool_boundary(self):
+        calls = []
+
+        def call_tool(name, arguments):
+            calls.append((name, arguments))
+            return {"status": "results", "results": []}
+
+        adapters = default_adapters(rvc_call_tool=call_tool)
+
+        self.assertTrue({"web3_career", "crypto_jobs_list", "remote_rocketship", "rvc"} <= set(adapters))
+        source = Source(
+            owner=self.owner,
+            slug="rvc",
+            config={"query": "product", "conversation_language_code": "ru", "target_country_codes": []},
+        )
+        self.assertEqual(adapters["rvc"].collect(source).records, ())
+        self.assertEqual(calls[0][0], "rvc_search_jobs")
+        self.assertIsNotNone(default_adapters()["rvc"].client)
+
+    def test_env_example_documents_exact_keyed_and_optional_ai_names(self):
+        values = (Path(__file__).resolve().parents[2] / ".env.example").read_text(encoding="utf-8")
+        for expected in (
+            "WEB3_CAREER_API_TOKEN=",
+            "WEB3_CAREER_FULL_DESCRIPTION_CONFIRMED=false",
+            "CRYPTOJOBS_LIST_API_KEY=",
+            "CRYPTOJOBS_LIST_FULL_DESCRIPTION_CONFIRMED=false",
+            "REMOTE_ROCKETSHIP_API_KEY=",
+            "REMOTE_ROCKETSHIP_ENABLED=false",
+            "REMOTE_ROCKETSHIP_ACTIVE_PLAN_CONFIRMED=false",
+            "OPENAI_API_KEY=",
+            "OPENAI_MODEL=",
+            "OPENAI_PRICES_JSON=",
+        ):
+            self.assertIn(expected, values)
+        self.assertNotIn("CRYPTOJOBS_LIST_DESCRIPTION_CONFIRMED=", values)
+        self.assertNotIn("REMOTE_ROCKETSHIP_ACCESS_CONFIRMED=", values)
 
 
 class PublicAdapterTests(TestCase):
@@ -272,6 +315,264 @@ class CollectorTests(TestCase):
         self.assertEqual(partial.status, Source.Status.READY)
         self.assertEqual(second.records, 1)
         self.assertEqual(Vacancy.objects.count(), 3)
+
+    def test_needs_access_adapter_failure_is_recorded_and_does_not_block_public_source(self):
+        restricted = Source.objects.create(
+            owner=self.owner, slug="restricted", name="Restricted", kind="site",
+            adapter="restricted", status=Source.Status.NEEDS_ACCESS,
+        )
+        public = Source.objects.create(
+            owner=self.owner, slug="public", name="Public", kind="site", adapter="public",
+        )
+
+        class MissingCredentials:
+            def collect(self, source, cursor):
+                raise SourceCollectionError("credentials_missing", "Доступ к источнику не настроен.")
+
+        class Healthy:
+            def collect(self, source, cursor):
+                return Batch((normalized_record(source.slug, "one"),), None, Coverage())
+
+        report = collect_sources(
+            self.owner,
+            adapters={"restricted": MissingCredentials(), "public": Healthy()},
+            holder="needs-access-check",
+        )
+
+        restricted.refresh_from_db()
+        public.refresh_from_db()
+        self.assertEqual((report.failed, report.succeeded, report.skipped), (1, 1, 0))
+        self.assertEqual(restricted.config["last_error"]["code"], "credentials_missing")
+        self.assertEqual(public.status, Source.Status.READY)
+
+    @patch.dict(os.environ, {}, clear=True)
+    def test_default_rocketship_missing_activation_is_safe_and_public_source_continues(self):
+        rocketship = Source.objects.create(
+            owner=self.owner, slug="remote-rocketship", name="Rocketship", kind="site",
+            adapter="remote_rocketship", status=Source.Status.NEEDS_ACCESS,
+        )
+        public = Source.objects.create(
+            owner=self.owner, slug="public", name="Public", kind="site", adapter="public-fixture",
+        )
+
+        class Healthy:
+            def collect(self, source, cursor):
+                return Batch((normalized_record(source.slug, "one"),), None, Coverage())
+
+        adapters = default_adapters()
+        adapters["public-fixture"] = Healthy()
+        report = collect_sources(self.owner, adapters=adapters, holder="default-rocketship-check")
+
+        rocketship.refresh_from_db()
+        public.refresh_from_db()
+        self.assertEqual((report.failed, report.succeeded), (1, 1))
+        self.assertEqual(rocketship.config["last_error"]["code"], "source_not_activated")
+        self.assertEqual(public.status, Source.Status.READY)
+
+    def test_rocketship_collection_uses_temporary_store_and_never_generic_upsert(self):
+        temporary = Source.objects.create(
+            owner=self.owner, slug="remote-rocketship", name="Rocketship", kind="site",
+            adapter="remote_rocketship", status=Source.Status.NEEDS_ACCESS,
+        )
+        now = timezone.now()
+
+        class Rocketship:
+            def collect(self, source, cursor):
+                record = normalized_record(source.slug, "temporary")
+                record.update({
+                    "expires_at": now + timezone.timedelta(hours=1),
+                    "_temporary_payload": {"raw": {"id": 1}, "normalized": {}, "derived": {}, "cache": {}},
+                })
+                return Batch((record,), None, Coverage())
+
+        with tempfile.TemporaryDirectory(prefix="job-t05-collector-") as directory:
+            with override_settings(TEMPORARY_ROOT=Path(directory)):
+                report = collect_sources(
+                    self.owner,
+                    adapters={"remote_rocketship": Rocketship()},
+                    holder="rocketship-temp-check",
+                    now=now,
+                    clock=lambda: now,
+                )
+                handles = TemporaryRocketshipStore(clock=lambda: now).list(self.owner, temporary)
+
+        temporary.refresh_from_db()
+        self.assertEqual((report.succeeded, report.records), (1, 1))
+        self.assertEqual(len(handles), 1)
+        self.assertEqual(temporary.status, Source.Status.READY)
+        self.assertFalse(SourceRecord.objects.exists())
+        self.assertFalse(Vacancy.objects.exists())
+
+    def test_rocketship_lost_lease_before_temp_write_leaves_no_cards(self):
+        source = Source.objects.create(
+            owner=self.owner, slug="remote-rocketship", name="Rocketship", kind="site",
+            adapter="remote_rocketship", status=Source.Status.NEEDS_ACCESS,
+        )
+        now = timezone.now()
+
+        class LeaseStealingAdapter:
+            def collect(self, source, cursor):
+                Lease.objects.filter(name=f"source-collector:{source.owner_id}").update(
+                    holder="new-holder", expires_at=now + timezone.timedelta(minutes=10)
+                )
+                record = normalized_record(source.slug, "must-not-write")
+                record.update({
+                    "expires_at": now + timezone.timedelta(hours=1),
+                    "_temporary_payload": {"raw": {"id": 1}, "normalized": {}, "derived": {}, "cache": {}},
+                })
+                return Batch((record,), None, Coverage())
+
+        with tempfile.TemporaryDirectory(prefix="job-t05-before-store-") as directory:
+            with override_settings(TEMPORARY_ROOT=Path(directory)):
+                store = TemporaryRocketshipStore(clock=lambda: now)
+                with self.assertRaises(CollectorBusy):
+                    collect_sources(
+                        self.owner,
+                        adapters={"remote_rocketship": LeaseStealingAdapter()},
+                        holder="old-holder",
+                        now=now,
+                        clock=lambda: now,
+                        temporary_store=store,
+                    )
+                self.assertEqual(store.list(self.owner, source), ())
+
+    def test_rocketship_stolen_lease_after_store_rolls_back_new_cards(self):
+        source = Source.objects.create(
+            owner=self.owner, slug="remote-rocketship", name="Rocketship", kind="site",
+            adapter="remote_rocketship", status=Source.Status.NEEDS_ACCESS,
+        )
+        now = timezone.now()
+
+        class Adapter:
+            def collect(self, source, cursor):
+                record = normalized_record(source.slug, "new")
+                record.update({
+                    "expires_at": now + timezone.timedelta(hours=1),
+                    "_temporary_payload": {"raw": {"id": 2}, "normalized": {}, "derived": {}, "cache": {}},
+                })
+                return Batch((record,), None, Coverage())
+
+        class StealingStore(TemporaryRocketshipStore):
+            def _steal(self, source):
+                Lease.objects.filter(name=f"source-collector:{source.owner_id}").update(
+                    holder="new-holder", expires_at=now + timezone.timedelta(minutes=10)
+                )
+
+            def store_batch(self, owner, source, batch):
+                handles = super().store_batch(owner, source, batch)
+                self._steal(source)
+                return handles
+
+            def store_page(self, owner, source, batch, *, page_key):
+                receipt = super().store_page(owner, source, batch, page_key=page_key)
+                self._steal(source)
+                return receipt
+
+        with tempfile.TemporaryDirectory(prefix="job-t05-after-store-") as directory:
+            with override_settings(TEMPORARY_ROOT=Path(directory)):
+                store = StealingStore(clock=lambda: now)
+                with self.assertRaises(CollectorBusy):
+                    collect_sources(
+                        self.owner,
+                        adapters={"remote_rocketship": Adapter()},
+                        holder="old-holder",
+                        now=now,
+                        clock=lambda: now,
+                        temporary_store=store,
+                    )
+                self.assertEqual(store.list(self.owner, source), ())
+
+    def test_rocketship_lease_expiring_during_store_rolls_back_before_checkpoint(self):
+        source = Source.objects.create(
+            owner=self.owner, slug="remote-rocketship", name="Rocketship", kind="site",
+            adapter="remote_rocketship", status=Source.Status.NEEDS_ACCESS,
+        )
+        now = timezone.now()
+
+        class Adapter:
+            def collect(self, source, cursor):
+                record = normalized_record(source.slug, "expires-during-write")
+                record.update({
+                    "expires_at": now + timezone.timedelta(hours=1),
+                    "_temporary_payload": {"raw": {"id": 3}, "normalized": {}, "derived": {}, "cache": {}},
+                })
+                return Batch((record,), None, Coverage())
+
+        moments = iter((now, now + timezone.timedelta(seconds=301)))
+        with tempfile.TemporaryDirectory(prefix="job-t05-expired-store-") as directory:
+            with override_settings(TEMPORARY_ROOT=Path(directory)):
+                store = TemporaryRocketshipStore(clock=lambda: now)
+                with self.assertRaises(CollectorBusy):
+                    collect_sources(
+                        self.owner,
+                        adapters={"remote_rocketship": Adapter()},
+                        holder="expiring-holder",
+                        now=now,
+                        clock=lambda: next(moments),
+                        temporary_store=store,
+                    )
+                self.assertEqual(store.list(self.owner, source), ())
+                source.refresh_from_db()
+                self.assertEqual(source.cursor, "")
+
+    def test_rocketship_checkpoint_failure_rolls_back_only_new_cards_and_retry_is_idempotent(self):
+        source = Source.objects.create(
+            owner=self.owner, slug="remote-rocketship", name="Rocketship", kind="site",
+            adapter="remote_rocketship", status=Source.Status.NEEDS_ACCESS,
+        )
+        now = timezone.now()
+
+        def batch(external_id):
+            record = normalized_record(source.slug, external_id)
+            record.update({
+                "expires_at": now + timezone.timedelta(hours=1),
+                "_temporary_payload": {
+                    "raw": {"id": external_id}, "normalized": {}, "derived": {}, "cache": {},
+                },
+            })
+            return Batch((record,), None, Coverage())
+
+        class Adapter:
+            def collect(self, source, cursor):
+                return batch("retry-page")
+
+        with tempfile.TemporaryDirectory(prefix="job-t05-checkpoint-") as directory:
+            with override_settings(
+                TEMPORARY_ROOT=Path(directory),
+                PRIVATE_ROOT=Path(directory) / "private",
+            ):
+                store = TemporaryRocketshipStore(clock=lambda: now)
+                existing = store.store_batch(self.owner, source, batch("existing"))[0]
+                store.save_user_state(self.owner, existing, status="saved", note="keep me")
+                with patch("jobs.sources.core.collector._checkpoint", side_effect=RuntimeError("db write failed")):
+                    failed = collect_sources(
+                        self.owner,
+                        adapters={"remote_rocketship": Adapter()},
+                        holder="checkpoint-failure",
+                        now=now,
+                        clock=lambda: now,
+                        temporary_store=store,
+                    )
+                self.assertEqual(failed.failed, 1)
+                self.assertEqual(store.list(self.owner, source), (existing,))
+                self.assertEqual(
+                    store.read_user_state(self.owner, existing),
+                    {"status": "saved", "note": "keep me"},
+                )
+
+                retried = collect_sources(
+                    self.owner,
+                    adapters={"remote_rocketship": Adapter()},
+                    holder="checkpoint-retry",
+                    now=now,
+                    clock=lambda: now,
+                    temporary_store=store,
+                )
+                handles = store.list(self.owner, source)
+
+        self.assertEqual((retried.succeeded, retried.records), (1, 1))
+        self.assertEqual(len(handles), 2)
+        self.assertEqual(len(set(handles)), 2)
 
     def test_unexpired_lease_blocks_even_if_holder_token_is_reused(self):
         now = timezone.now()
@@ -538,6 +839,8 @@ class SourceScreenTests(TestCase):
             self.assertContains(response, expected)
         self.assertNotContains(response, "Окно не ограничено")
         self.assertContains(response, "aria-current=\"page\"")
+        self.assertContains(response, reverse("manage"))
+        self.assertContains(response, "Управлять Telegram-каналами")
 
     def test_invalid_interval_is_rendered_fail_closed_instead_of_500(self):
         seed_sources(self.owner)

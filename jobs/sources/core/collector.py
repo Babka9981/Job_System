@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 
 from django.db import IntegrityError, transaction
@@ -7,10 +7,14 @@ from django.utils.dateparse import parse_datetime
 
 from jobs.models.models import Lease, Source
 from jobs.sources.core.contracts import SourceCollectionError
+from jobs.sources.keyed.crypto_jobs_list import CryptoJobsListAdapter
+from jobs.sources.keyed.remote_rocketship import RemoteRocketshipAdapter, TemporaryRocketshipStore
+from jobs.sources.keyed.web3_career import Web3CareerAdapter
 from jobs.sources.public.himalayas import HimalayasAdapter
 from jobs.sources.public.http import JsonHttpClient
 from jobs.sources.public.jobicy import JobicyAdapter
 from jobs.sources.public.remote_ok import RemoteOkAdapter
+from jobs.sources.rvc.adapter import RvcAdapter, RvcMcpClient, RvcStreamableHttpToolCaller
 from jobs.vacancies.services import upsert_record
 
 
@@ -26,12 +30,17 @@ class CollectionReport:
     records: int = 0
 
 
-def default_adapters(http=None):
+def default_adapters(http=None, *, keyed_http=None, rvc_call_tool=None):
     client = http or JsonHttpClient()
+    rvc_transport = rvc_call_tool or RvcStreamableHttpToolCaller()
     return {
         "remote_ok": RemoteOkAdapter(http=client),
         "himalayas": HimalayasAdapter(http=client),
         "jobicy": JobicyAdapter(http=client),
+        "web3_career": Web3CareerAdapter(http=keyed_http),
+        "crypto_jobs_list": CryptoJobsListAdapter(http=keyed_http),
+        "remote_rocketship": RemoteRocketshipAdapter(http=keyed_http),
+        "rvc": RvcAdapter(client=RvcMcpClient(call_tool=rvc_transport)),
     }
 
 
@@ -157,11 +166,23 @@ def _merge_coverage(current, batch):
     }
 
 
-def collect_sources(owner, *, adapters=None, holder, now=None, source_slugs=None, max_pages=100, clock=None):
+def collect_sources(
+    owner,
+    *,
+    adapters=None,
+    holder,
+    now=None,
+    source_slugs=None,
+    max_pages=100,
+    clock=None,
+    rvc_call_tool=None,
+    temporary_store=None,
+):
     """Collect enabled sources under one lease; checkpoint only committed pages."""
     clock = clock or timezone.now
     now = now or clock()
-    adapters = default_adapters() if adapters is None else adapters
+    adapters = default_adapters(rvc_call_tool=rvc_call_tool) if adapters is None else adapters
+    temporary_store = temporary_store or TemporaryRocketshipStore(clock=clock)
     lease_name = f"source-collector:{owner.pk}"
     _acquire_lease(lease_name, holder, now)
     succeeded = failed = skipped = records = 0
@@ -171,7 +192,7 @@ def collect_sources(owner, *, adapters=None, holder, now=None, source_slugs=None
             queryset = queryset.filter(slug__in=source_slugs)
         for source in queryset:
             adapter = adapters.get(source.adapter)
-            if adapter is None or source.status == Source.Status.NEEDS_ACCESS:
+            if adapter is None:
                 skipped += 1
                 continue
             try:
@@ -189,11 +210,32 @@ def collect_sources(owner, *, adapters=None, holder, now=None, source_slugs=None
                         if _initial_record_allowed(record, page_now - timedelta(days=7))
                     )
                     next_coverage = _merge_coverage(aggregate_coverage, batch)
-                    with transaction.atomic():
-                        _renew_lease(lease_name, holder, page_now)
-                        for record in records_to_store:
-                            upsert_record(_bind_record(source, record), owner=owner)
-                        _checkpoint(source, batch, page_now, next_coverage)
+                    if source.adapter == "remote_rocketship":
+                        with transaction.atomic():
+                            _renew_lease(lease_name, holder, page_now)
+                        receipt = temporary_store.store_page(
+                            owner,
+                            source,
+                            replace(batch, records=records_to_store),
+                            page_key=(
+                                f"{previous_cursor or 'initial'}:"
+                                f"{source.last_success.isoformat() if source.last_success else 'never'}"
+                            ),
+                        )
+                        try:
+                            checkpoint_now = clock()
+                            with transaction.atomic():
+                                _renew_lease(lease_name, holder, checkpoint_now)
+                                _checkpoint(source, batch, checkpoint_now, next_coverage)
+                        except Exception:
+                            temporary_store.rollback_page(owner, source, receipt)
+                            raise
+                    else:
+                        with transaction.atomic():
+                            _renew_lease(lease_name, holder, page_now)
+                            for record in records_to_store:
+                                upsert_record(_bind_record(source, record), owner=owner)
+                            _checkpoint(source, batch, page_now, next_coverage)
                     aggregate_coverage = next_coverage
                     records += len(records_to_store)
                     pages += 1

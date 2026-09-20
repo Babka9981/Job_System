@@ -54,7 +54,11 @@ def seed_sources(owner):
             "config": {
                 "access_mode": access_mode,
                 "reason": reason,
-                "service_interval_seconds": 86400 if adapter == "himalayas" else 3600 if adapter == "jobicy" else 0,
+                "service_interval_seconds": (
+                    86400 if adapter == "himalayas" else
+                    14400 if adapter == "remote_rocketship" else
+                    3600 if adapter == "jobicy" else 0
+                ),
                 "provider_freshness": "24 часа" if adapter == "himalayas" else "Не заявлена",
             },
         })
