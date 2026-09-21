@@ -12,7 +12,7 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/IliaF/.codex/skills/autopilot",
   "startedAt": "2026-09-20T15:27:16+03:00",
-  "updatedAt": "2026-09-21T18:25:00+03:00",
+  "updatedAt": "2026-09-21T19:05:00+03:00",
   "finishedAt": null,
   "stages": [
     {"id":"preflight","status":"done","startedAt":"2026-09-20T15:27:16+03:00","finishedAt":"2026-09-20T15:46:44+03:00","note":"Репозиторий и исходные документы проверены"},
@@ -20,11 +20,11 @@ window.STATE =
     {"id":"briefing","status":"done","finishedAt":"2026-09-20T15:46:44+03:00","note":"OpenAI, настраиваемый поиск, CV extraction; search provider уточняется перед T08"},
     {"id":"spec","status":"done","finishedAt":"2026-09-20T15:46:44+03:00","note":"Независимая проверка пройдена"},
     {"id":"plan","status":"done","finishedAt":"2026-09-20T15:46:44+03:00","note":"12 тикетов; реализация ожидает команды"},
-    {"id":"build","status":"done","startedAt":"2026-09-20T16:05:00+03:00","finishedAt":"2026-09-21T18:25:00+03:00","note":"T01–T19 завершены"},
-    {"id":"review","status":"done","startedAt":"2026-09-20T16:40:00+03:00","finishedAt":"2026-09-21T18:25:00+03:00","note":"T19 spec DONE; blocking craft/security findings нет"},
-    {"id":"final","status":"active","startedAt":"2026-09-21T05:29:05+03:00","note":"T19 принят; deploy и успешный production draft"}
+    {"id":"build","status":"done","startedAt":"2026-09-20T16:05:00+03:00","finishedAt":"2026-09-21T19:05:00+03:00","note":"T01–T20 завершены"},
+    {"id":"review","status":"done","startedAt":"2026-09-20T16:40:00+03:00","finishedAt":"2026-09-21T19:05:00+03:00","note":"T20 spec DONE; craft/security PASS"},
+    {"id":"final","status":"active","startedAt":"2026-09-21T05:29:05+03:00","note":"Production draft v2 создан; T20 permanence принят, ожидает rollout/blind"}
   ],
-  "requirements":{"total":92,"done":89,"inTicket":2,"inSpec":0,"placeholder":1,"deferred":0,"dropped":0},
+  "requirements":{"total":93,"done":89,"inTicket":3,"inSpec":0,"placeholder":1,"deferred":0,"dropped":0},
   "tickets":[
   {
     "id": "01",
@@ -572,6 +572,23 @@ window.STATE =
     "finishedAt": "2026-09-21T18:25:00+03:00",
     "commit": "4bbeb07",
     "tests": "RED default deadline/socket 45 instead of 120 and expired seam invoked; regression/kill-reap 3 passed; targeted 96; full Django 372 passed (1 skipped); UI 10; migrations, pip, diff clean",
+    "retries": 0,
+    "repairs": 0,
+    "handoffs": 0,
+    "githubIssue": null
+  },
+  {
+    "id": "20",
+    "title": "Закрепить 8000 output tokens для profile extraction",
+    "requirements": ["G17","D05"],
+    "blockedBy": ["19"],
+    "wave": 14,
+    "zone": ["jobs/profile/services.py","jobs/tests/test_profile.py","jobs/tests/test_budget.py",".env.example"],
+    "status": "done",
+    "startedAt": "2026-09-21T18:45:00+03:00",
+    "finishedAt": "2026-09-21T19:05:00+03:00",
+    "commit": "7c790b2",
+    "tests": "RED default 4000 and env missing; targeted 54 passed; full Django 374 passed (1 skipped); UI 10; migrations, pip, diff clean",
     "retries": 0,
     "repairs": 0,
     "handoffs": 0,

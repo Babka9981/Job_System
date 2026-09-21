@@ -337,3 +337,14 @@ Regression test без сети фиксирует: default transport перед
 явный короткий deadline остаётся коротким, истёкший deadline fail-closed, budget
 reservation settle/pending семантика не меняется, secrets/CV не попадают в argv/env/log.
 Production retry выполняется штатным profile service и обязан создать сохраняемый draft.
+
+## S18. Достаточный лимит structured profile output
+
+Default `JOB_PROFILE_MAX_OUTPUT_TOKENS` равен 8000 для `gpt-5-mini`: production доказал,
+что 4000 завершается incomplete/invalid response, а 8000 создаёт сохраняемый draft.
+Значение остаётся environment override и участвует в консервативном budget reservation;
+суточный лимит и точная model price продолжают ограничивать вызов до transport.
+
+Regression test фиксирует передаваемый max_output_tokens=8000 и рассчитанный максимум
+стоимости, без live API/CV. `.env.example` документирует значение; deployment wizard не
+перезаписывает ручной override. Production уже использует 8000 и draft v2 доступен owner.

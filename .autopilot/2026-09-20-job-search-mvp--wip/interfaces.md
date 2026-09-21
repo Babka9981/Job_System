@@ -219,3 +219,8 @@ Content permission проверяется до LLM; CV/Search/Jobs недове�
 
 - `OpenAIResponsesTransport.create_response(...)` сохраняет публичную сигнатуру; внутренний default deadline теперь 120 секунд.
 - Явный более короткий deadline никогда не расширяется; истёкший отклоняется до запуска HTTP subprocess.
+
+# Из таска 20 — profile extraction output limit
+
+- `JOB_PROFILE_MAX_OUTPUT_TOKENS` имеет default `8000`; явный environment override сохраняется.
+- Переданный лимит участвует в консервативном budget reservation до transport.
