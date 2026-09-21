@@ -1,0 +1,10 @@
+job.web3babka.su {
+	encode zstd gzip
+
+	handle_path /static/* {
+		root * /srv/job-system/deployment/runtime/staticfiles
+		file_server
+	}
+
+	reverse_proxy 127.0.0.1:18111
+}

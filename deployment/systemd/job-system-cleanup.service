@@ -1,0 +1,10 @@
+[Unit]
+Description=Clean expired Job System temporary content
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/job-system/deployment
+EnvironmentFile=/srv/job-system/deployment/release.env
+ExecStart=/usr/bin/docker compose run --rm -T web python manage.py cleanup_expired

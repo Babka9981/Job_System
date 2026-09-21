@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily encrypted Job System backup
+
+[Timer]
+OnCalendar=*-*-* 02:20:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

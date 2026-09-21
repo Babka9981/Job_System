@@ -1,0 +1,36 @@
+name: job-system
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile
+    image: job-system:${JOB_IMAGE_TAG:?JOB_IMAGE_TAG must be an immutable release tag}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      JOB_DATABASE_PATH: /app/data/db.sqlite3
+      JOB_PRIVATE_ROOT: /app/private
+      JOB_TEMPORARY_ROOT: /app/temporary
+      JOB_STATIC_ROOT: /app/staticfiles
+    ports:
+      - "127.0.0.1:18111:8000"
+    volumes:
+      - ./runtime/data:/app/data
+      - ./runtime/private:/app/private
+      - ./runtime/temporary:/app/temporary
+      - ./runtime/staticfiles:/app/staticfiles
+      - ./runtime/backups:/backups
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "python", "-c", "import json,urllib.request; request=urllib.request.Request('http://127.0.0.1:8000/healthz/', headers={'X-Forwarded-Proto':'https'}); assert json.load(urllib.request.urlopen(request, timeout=3))['status']=='ok'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

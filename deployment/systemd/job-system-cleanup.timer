@@ -1,0 +1,9 @@
+[Unit]
+Description=Hourly Job System TTL cleanup
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target

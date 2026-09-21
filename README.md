@@ -71,3 +71,7 @@ Production запускается за HTTPS reverse proxy (планируетс
 
 План разработки: [docs/planning/README.md](docs/planning/README.md). Требования:
 [Job_Search_MVP_TZ.md](Job_Search_MVP_TZ.md). UI: [design-system/README.md](design-system/README.md).
+
+Production readiness, isolated deploy, rollback, encrypted backup и restore:
+[docs/operations/README.md](docs/operations/README.md). Повторяемая настройка выполняется
+`deployment/setup-wizard.sh`; фактический VPS deploy требует отдельного разрешения.
