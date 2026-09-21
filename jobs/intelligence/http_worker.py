@@ -3,10 +3,26 @@
 import base64
 import http.client
 import json
+import math
 import socket
 import ssl
 import sys
 from urllib.parse import urlsplit
+
+
+_DEFAULT_SOCKET_TIMEOUT = 30.0
+_MIN_SOCKET_TIMEOUT = 0.1
+_MAX_SOCKET_TIMEOUT = 120.0
+
+
+def _bounded_socket_timeout(value):
+    try:
+        timeout = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("invalid socket timeout") from exc
+    if not math.isfinite(timeout):
+        raise ValueError("invalid socket timeout")
+    return min(max(timeout, _MIN_SOCKET_TIMEOUT), _MAX_SOCKET_TIMEOUT)
 
 
 class _PinnedHTTPSConnection(http.client.HTTPSConnection):
@@ -32,7 +48,7 @@ def _exchange(spec):
     parsed = urlsplit(str(spec["url"]))
     if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
         raise ValueError("invalid URL")
-    timeout = min(max(float(spec.get("socket_timeout", 30)), 0.1), 30.0)
+    timeout = _bounded_socket_timeout(spec.get("socket_timeout", _DEFAULT_SOCKET_TIMEOUT))
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     pinned_ips = spec.get("pinned_ips") or []
     if pinned_ips:

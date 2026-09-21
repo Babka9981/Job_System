@@ -12,6 +12,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
+from jobs.intelligence import http_worker
 from jobs.intelligence.fetch import FetchError, PublicFetcher
 from jobs.intelligence.http_process import HTTPProcessError, run_http_exchange
 from jobs.intelligence.research import research
@@ -26,6 +27,57 @@ from jobs.intelligence.search import (
 from jobs.intelligence.search.brave import _http_transport as brave_http_transport
 from jobs.intelligence.search.tavily import _http_transport as tavily_http_transport
 from jobs.models.models import Profile, ProfileFact, Research, UsageLedger, UsageReservation, Vacancy
+
+
+class WorkerSocketTimeoutTests(TestCase):
+    def _exchange_timeout(self, socket_timeout):
+        captured = {}
+
+        class Response:
+            status = 200
+
+            def getheaders(self):
+                return []
+
+            def read(self, _limit):
+                return b""
+
+        class Connection:
+            def __init__(self, _host, *, port, timeout):
+                captured.update(port=port, timeout=timeout)
+
+            def request(self, *_args, **_kwargs):
+                pass
+
+            def getresponse(self):
+                return Response()
+
+            def close(self):
+                pass
+
+        with mock.patch.object(http_worker.http.client, "HTTPSConnection", Connection):
+            result = http_worker._exchange({
+                "url": "https://example.com/",
+                "socket_timeout": socket_timeout,
+            })
+
+        self.assertTrue(result["ok"])
+        return captured["timeout"]
+
+    def test_worker_passes_socket_timeout_above_thirty_seconds_to_connection(self):
+        self.assertEqual(self._exchange_timeout(75), 75.0)
+
+    def test_worker_clamps_socket_timeout_to_bounded_range(self):
+        self.assertEqual(self._exchange_timeout(0), 0.1)
+        self.assertEqual(self._exchange_timeout(10_000), 120.0)
+
+    def test_worker_rejects_invalid_or_non_finite_socket_timeout(self):
+        for value in (None, "invalid", float("nan"), float("inf"), float("-inf")):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                http_worker._exchange({
+                    "url": "https://example.com/",
+                    "socket_timeout": value,
+                })
 
 
 class SearchProviderTests(TestCase):
