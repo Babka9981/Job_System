@@ -1,0 +1,12 @@
+{
+  "name": "job-system-acceptance",
+  "private": true,
+  "scripts": {
+    "test:ui": "node --test jobs/static/ui/tests/*.test.cjs tests/acceptance/browser-harness.test.cjs",
+    "test:browser": "node tests/acceptance/browser-acceptance.cjs"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.10.2",
+    "playwright-core": "1.55.1"
+  }
+}

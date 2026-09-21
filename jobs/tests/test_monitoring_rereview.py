@@ -1,4 +1,5 @@
 import io
+import traceback
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -9,7 +10,7 @@ from django.test import TestCase, override_settings
 
 from jobs.matching.services import Assessment
 from jobs.models.models import NotificationOutbox, Profile, Run, Source, SourceRecord, Vacancy
-from jobs.monitoring.service import run_cycle
+from jobs.monitoring.service import CycleExecutionError, run_cycle
 from jobs.notifications.service import TelegramBotTransport, deliver_digest
 
 
@@ -78,3 +79,20 @@ class MonitoringScopedRereviewTests(TestCase):
         self.assertIn(exact_url, text)
         self.assertNotIn(exact_url[:500] + "…", text)
         self.assertIn(run.notifications.get().payload["list_url"], text)
+
+    def test_cycle_failure_never_persists_upstream_exception_details(self):
+        secret = "api-key-should-never-be-stored"
+
+        def failing_collector(*args, **kwargs):
+            raise RuntimeError(f"provider rejected {secret}")
+
+        with self.assertRaises(CycleExecutionError) as caught:
+            run_cycle(self.owner, collector=failing_collector)
+
+        summary = Run.objects.get().summary
+        self.assertEqual(summary["error"]["code"], "RuntimeError")
+        self.assertNotIn(secret, str(summary))
+        self.assertEqual(summary["error"]["message"], "Цикл мониторинга завершился ошибкой.")
+        self.assertIsNone(caught.exception.__cause__)
+        self.assertIsNone(caught.exception.__context__)
+        self.assertNotIn(secret, "".join(traceback.format_exception(caught.exception)))

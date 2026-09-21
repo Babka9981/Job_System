@@ -17,6 +17,10 @@ class CycleBusy(Exception):
     pass
 
 
+class CycleExecutionError(Exception):
+    """Safe public failure for an unsuccessful monitoring cycle."""
+
+
 def _lease_seconds():
     try:
         return max(60, int(getattr(settings, "MONITORING_LEASE_SECONDS", 1800)))
@@ -117,6 +121,7 @@ def run_cycle(owner, *, adapters=None, evaluator=evaluate, collector=collect_sou
     holder = uuid.uuid4().hex
     recovered = _acquire(holder, now)
     run = Run.objects.create(status="running", started_at=now, summary={"owner_id": owner.pk, "holder": holder, "schedule_slot": schedule_slot, "recovered": recovered})
+    failure = None
     try:
         try:
             report = collector(owner, adapters=adapters, holder=f"cycle:{holder}", now=now)
@@ -161,10 +166,21 @@ def run_cycle(owner, *, adapters=None, evaluator=evaluate, collector=collect_sou
         run.status = "partial" if report.failed else "complete"
     except Exception as exc:
         run.status = "error"
-        run.summary = {**run.summary, "error": {"code": type(exc).__name__, "message": str(exc)[:300]}}
-        raise
+        run.summary = {
+            **run.summary,
+            "error": {
+                "code": type(exc).__name__,
+                "message": "Цикл мониторинга завершился ошибкой.",
+            },
+        }
+        if isinstance(exc, CycleBusy):
+            failure = CycleBusy("Цикл мониторинга уже выполняется или право на него утрачено.")
+        else:
+            failure = CycleExecutionError("Цикл мониторинга завершился ошибкой.")
     finally:
         run.finished_at = timezone.now()
         run.save(update_fields=["status", "summary", "finished_at", "updated_at"])
         _release(holder)
+    if failure is not None:
+        raise failure
     return run

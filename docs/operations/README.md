@@ -54,7 +54,7 @@ Wizard скрывает secret input и пишет только локальны
 sudo install -d -m 0755 -o 10001 -g 10001 /srv/job-system/deployment/runtime
 sudo install -d -m 0700 -o 10001 -g 10001 /srv/job-system/deployment/runtime/{data,private,temporary,backups}
 sudo install -d -m 0755 -o 10001 -g 10001 /srv/job-system/deployment/runtime/staticfiles
-sudo rsync -a --delete --exclude .git --exclude deployment/runtime ./ /srv/job-system/
+sudo rsync -a --delete --exclude /.git --exclude /deployment/.env --exclude /deployment/release.env --exclude /deployment/runtime/** ./ /srv/job-system/
 cd /srv/job-system/deployment
 chmod 600 .env
 export JOB_IMAGE_TAG="$(date -u +%Y%m%dT%H%M%SZ)"

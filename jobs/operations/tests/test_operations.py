@@ -117,6 +117,61 @@ class SnapshotTests(TransactionTestCase):
             with self.assertRaisesRegex(ValueError, "unsafe archive member"):
                 verify_snapshot(archive)
 
+    def test_verify_rejects_unexpected_file_not_declared_by_manifest(self):
+        with tempfile.TemporaryDirectory() as private_dir, tempfile.TemporaryDirectory() as output_dir:
+            archive = Path(output_dir) / "snapshot.tar"
+            poisoned = Path(output_dir) / "poisoned.tar"
+            with override_settings(PRIVATE_ROOT=Path(private_dir)):
+                create_snapshot(archive)
+            with tarfile.open(archive, "r") as source, tarfile.open(poisoned, "w") as target:
+                for member in source.getmembers():
+                    extracted = source.extractfile(member) if member.isfile() else None
+                    target.addfile(member, extracted)
+                secret = b"credential"
+                member = tarfile.TarInfo("payload/private/unexpected-token.txt")
+                member.size = len(secret)
+                target.addfile(member, io.BytesIO(secret))
+            with self.assertRaisesRegex(ValueError, "unexpected snapshot file"):
+                verify_snapshot(poisoned)
+
+    def test_verify_rejects_nested_manifest_named_file(self):
+        with tempfile.TemporaryDirectory() as private_dir, tempfile.TemporaryDirectory() as output_dir:
+            archive = Path(output_dir) / "snapshot.tar"
+            poisoned = Path(output_dir) / "nested-manifest.tar"
+            with override_settings(PRIVATE_ROOT=Path(private_dir)):
+                create_snapshot(archive)
+            with tarfile.open(archive, "r") as source, tarfile.open(poisoned, "w") as target:
+                for member in source.getmembers():
+                    extracted = source.extractfile(member) if member.isfile() else None
+                    target.addfile(member, extracted)
+                body = b"credential-like-data"
+                member = tarfile.TarInfo("payload/private/nested/manifest.json")
+                member.size = len(body)
+                target.addfile(member, io.BytesIO(body))
+            with self.assertRaisesRegex(ValueError, "unexpected snapshot file"):
+                verify_snapshot(poisoned)
+
+    def test_verify_rejects_unknown_snapshot_format(self):
+        with tempfile.TemporaryDirectory() as private_dir, tempfile.TemporaryDirectory() as output_dir:
+            archive = Path(output_dir) / "snapshot.tar"
+            changed = Path(output_dir) / "format.tar"
+            with override_settings(PRIVATE_ROOT=Path(private_dir)):
+                create_snapshot(archive)
+            with tarfile.open(archive, "r") as source, tarfile.open(changed, "w") as target:
+                for member in source.getmembers():
+                    if member.name == "payload/manifest.json":
+                        manifest = __import__("json").loads(source.extractfile(member).read())
+                        manifest["format"] = 999
+                        body = __import__("json").dumps(manifest).encode()
+                        replacement = tarfile.TarInfo(member.name)
+                        replacement.size = len(body)
+                        target.addfile(replacement, io.BytesIO(body))
+                    else:
+                        extracted = source.extractfile(member) if member.isfile() else None
+                        target.addfile(member, extracted)
+            with self.assertRaisesRegex(ValueError, "unsupported snapshot format"):
+                verify_snapshot(changed)
+
     def test_empty_private_snapshot_round_trips_with_private_directory(self):
         with tempfile.TemporaryDirectory() as private_dir, tempfile.TemporaryDirectory() as output_dir:
             private = Path(private_dir)
@@ -188,3 +243,24 @@ class DeploymentContractTests(SimpleTestCase):
             self.assertIn(unit, script[:marker])
         self.assertNotIn("mv \"$data_dir\"", script[:marker])
         self.assertIn("bash ./restore.sh", self.read("docs/operations/README.md"))
+
+    def test_deploy_sync_preserves_production_environment_and_release_tag(self):
+        runbook = self.read("docs/operations/README.md")
+        rsync = next(line for line in runbook.splitlines() if "rsync -a --delete" in line)
+        self.assertIn("--exclude /deployment/.env", rsync)
+        self.assertIn("--exclude /deployment/release.env", rsync)
+        self.assertIn("--exclude /deployment/runtime/**", rsync)
+
+    def test_restore_rollback_tracks_each_completed_move(self):
+        script = self.read("deployment/restore.sh")
+        for flag in (
+            "data_backed_up=0",
+            "private_backed_up=0",
+            "data_installed=0",
+            "private_installed=0",
+            '[[ "$data_installed" -eq 1 ]]',
+            '[[ "$private_installed" -eq 1 ]]',
+            '[[ "$data_backed_up" -eq 1 ]]',
+            '[[ "$private_backed_up" -eq 1 ]]',
+        ):
+            self.assertIn(flag, script)

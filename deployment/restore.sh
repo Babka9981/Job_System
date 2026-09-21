@@ -59,6 +59,10 @@ failed_dir="$runtime/failed-$stamp"
 data_dir="$runtime/data"
 private_dir="$runtime/private"
 swap_started=0
+data_backed_up=0
+private_backed_up=0
+data_installed=0
+private_installed=0
 
 rollback_swap() {
   local status=$?
@@ -66,10 +70,10 @@ rollback_swap() {
   if [[ "$swap_started" -eq 1 ]]; then
     docker compose stop web
     mkdir -m 0700 "$failed_dir"
-    [[ -d "$data_dir" ]] && mv -- "$data_dir" "$failed_dir/data"
-    [[ -d "$private_dir" ]] && mv -- "$private_dir" "$failed_dir/private"
-    [[ -d "$rollback_dir/data" ]] && mv -- "$rollback_dir/data" "$data_dir"
-    [[ -d "$rollback_dir/private" ]] && mv -- "$rollback_dir/private" "$private_dir"
+    [[ "$data_installed" -eq 1 ]] && mv -- "$data_dir" "$failed_dir/data"
+    [[ "$private_installed" -eq 1 ]] && mv -- "$private_dir" "$failed_dir/private"
+    [[ "$data_backed_up" -eq 1 ]] && mv -- "$rollback_dir/data" "$data_dir"
+    [[ "$private_backed_up" -eq 1 ]] && mv -- "$rollback_dir/private" "$private_dir"
   fi
   printf 'restore failed; writers remain disabled, inspect %s and %s\n' "$rollback_dir" "$failed_dir" >&2
   exit "$status"
@@ -91,9 +95,13 @@ assert_writers_inactive
 # SWAP STARTS HERE
 swap_started=1
 mv -- "$data_dir" "$rollback_dir/data"
+data_backed_up=1
 mv -- "$private_dir" "$rollback_dir/private"
+private_backed_up=1
 mv -- "$stage_dir/data" "$data_dir"
+data_installed=1
 mv -- "$stage_dir/private" "$private_dir"
+private_installed=1
 
 docker compose run --rm -T web python manage.py migrate
 docker compose up -d web

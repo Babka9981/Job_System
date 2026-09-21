@@ -208,7 +208,28 @@ def verify_snapshot(archive_path):
             archive.extractall(root, filter="data")
         payload = root / "payload"
         manifest = json.loads((payload / "manifest.json").read_text(encoding="utf-8"))
-        for relative, expected in manifest.get("files", {}).items():
+        if manifest.get("format") != 1:
+            raise ValueError("unsupported snapshot format")
+        declared_files = manifest.get("files")
+        if not isinstance(declared_files, dict):
+            raise ValueError("snapshot file manifest missing")
+        actual_files = {
+            path.relative_to(payload).as_posix()
+            for path in payload.rglob("*")
+            if path.is_file() and path.relative_to(payload).as_posix() != "manifest.json"
+        }
+        expected_files = set(declared_files)
+        unexpected = actual_files - expected_files
+        missing = expected_files - actual_files
+        if unexpected:
+            raise ValueError(f"unexpected snapshot file: {sorted(unexpected)[0]}")
+        if missing:
+            raise ValueError(f"snapshot file missing: {sorted(missing)[0]}")
+        for relative, expected in declared_files.items():
+            if not isinstance(relative, str) or (
+                relative != "db.sqlite3" and not relative.startswith("private/")
+            ):
+                raise ValueError("unexpected snapshot file declaration")
             path = (payload / relative).resolve()
             if not path.is_relative_to(payload) or not path.is_file() or _sha256(path) != expected:
                 raise ValueError(f"snapshot checksum failed: {relative}")
