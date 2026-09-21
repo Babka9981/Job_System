@@ -198,3 +198,9 @@ Content permission проверяется до LLM; CV/Search/Jobs недове�
 - `.sources-table-container` — единственная горизонтально прокручиваемая область экрана источников; страница не прокручивается по горизонтали.
 - `.sources-table` — десять колонок с явной геометрией, sticky header и sticky row header.
 - Семантика: `scope="col"` для заголовков колонок, `scope="row"` для источника; focusable region имеет доступное имя.
+
+# Из таска 16 — читаемый CV preview
+
+- `build_resume_preview(text: str) -> tuple[ResumePreviewBlock, ...]` строит только display-модель и не меняет `Resume.text`.
+- `ResumePreviewBlock(label: str, text: str)` хранит безопасную подпись маркера и точное содержимое строки для шаблона.
+- LLM и storage продолжают использовать исходный `Resume.text`; preview и raw-view существуют только на owner-scoped profile page.
