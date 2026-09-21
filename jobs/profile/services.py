@@ -137,7 +137,7 @@ def extract_profile(resume, *, gateway, daily_limit):
         schema=PROFILE_EXTRACTION_SCHEMA,
         daily_limit=daily_limit,
         max_input_tokens=int(os.environ.get("JOB_PROFILE_MAX_INPUT_TOKENS", "30000")),
-        max_output_tokens=int(os.environ.get("JOB_PROFILE_MAX_OUTPUT_TOKENS", "4000")),
+        max_output_tokens=int(os.environ.get("JOB_PROFILE_MAX_OUTPUT_TOKENS", "8000")),
     )
     with transaction.atomic():
         profile = Profile.objects.select_for_update().get(pk=resume.profile_id)

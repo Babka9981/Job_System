@@ -158,6 +158,7 @@ class ResumeUploadTests(TestCase):
 
 class FakeProfileGateway:
     def structured(self, **kwargs):
+        self.kwargs = kwargs
         self.input_text = kwargs["input_text"]
         return {
             "about": "Product manager в fintech.",
@@ -209,6 +210,35 @@ class PendingGateway:
 
 
 class ProfileExtractionTests(TestCase):
+    def test_extraction_defaults_to_eight_thousand_output_tokens(self):
+        owner = get_user_model().objects.create_user("owner", password="secret")
+        profile = Profile.objects.create(owner=owner)
+        resume = Resume.objects.create(
+            profile=profile, private_path="private/cv.docx",
+            text="[Блок 2] Запустил платежный продукт", extraction_state="complete",
+        )
+        gateway = FakeProfileGateway()
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("JOB_PROFILE_MAX_OUTPUT_TOKENS", None)
+            extract_profile(resume, gateway=gateway, daily_limit="5.00")
+
+        self.assertEqual(gateway.kwargs["max_output_tokens"], 8000)
+
+    @patch.dict(os.environ, {"JOB_PROFILE_MAX_OUTPUT_TOKENS": "6000"}, clear=False)
+    def test_extraction_honors_output_token_environment_override(self):
+        owner = get_user_model().objects.create_user("owner", password="secret")
+        profile = Profile.objects.create(owner=owner)
+        resume = Resume.objects.create(
+            profile=profile, private_path="private/cv.docx",
+            text="[Блок 2] Запустил платежный продукт", extraction_state="complete",
+        )
+        gateway = FakeProfileGateway()
+
+        extract_profile(resume, gateway=gateway, daily_limit="5.00")
+
+        self.assertEqual(gateway.kwargs["max_output_tokens"], 6000)
+
     def test_extraction_creates_untrusted_draft_and_confirmation_is_explicit(self):
         owner = get_user_model().objects.create_user("owner", password="secret")
         profile = Profile.objects.create(owner=owner, version=2, confirmed_version=2, about="Старое подтверждённое")

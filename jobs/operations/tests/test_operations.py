@@ -198,6 +198,7 @@ class DeploymentContractTests(SimpleTestCase):
 
         self.assertIn("OPENAI_MODEL=gpt-5-mini", env_example)
         self.assertIn(f"OPENAI_PRICES_JSON={price_json}", env_example)
+        self.assertIn("JOB_PROFILE_MAX_OUTPUT_TOKENS=8000", env_example)
         self.assertIn('write_env OPENAI_MODEL "$OPENAI_MODEL"', wizard)
         self.assertIn(f'OPENAI_PRICES_JSON=\'{price_json}\'', wizard)
         self.assertIn('write_env OPENAI_PRICES_JSON "$OPENAI_PRICES_JSON"', wizard)
