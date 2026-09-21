@@ -13,6 +13,7 @@ from django.db import IntegrityError, OperationalError, transaction
 from django.utils import timezone
 
 from jobs.intelligence.gateway import GatewayError, GatewayUnavailable, OpenAIGateway
+from jobs.intelligence.config import DEFAULT_OPENAI_MODEL
 from jobs.models.models import Lease, Profile
 
 
@@ -140,7 +141,7 @@ def _configured_prices():
 def _default_gateway(*, model=None):
     return OpenAIGateway(
         api_key=_configured_value("OPENAI_API_KEY", "OPENAI_API_KEY"),
-        model=model or _configured_value("OPENAI_MODEL", "OPENAI_MODEL") or "gpt-5.6-luna",
+        model=model or _configured_value("OPENAI_MODEL", "OPENAI_MODEL") or DEFAULT_OPENAI_MODEL,
         prices=_configured_prices(),
     )
 
@@ -421,7 +422,7 @@ def evaluate(vacancy, criteria, *, gateway=None, profile_version=None, daily_lim
     if gateway is None:
         try:
             gateway = _default_gateway(
-                model=(profile.preferences or {}).get("openai_model", "gpt-5.6-luna") if profile else None,
+                model=(profile.preferences or {}).get("openai_model", DEFAULT_OPENAI_MODEL) if profile else None,
             )
         except GatewayUnavailable as exc:
             return Assessment("pending", ("Конфигурация оценки недоступна; вакансия остаётся ожидающей.",), (), error_code=exc.code, cache_key=key)

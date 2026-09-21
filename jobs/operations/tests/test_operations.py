@@ -191,6 +191,20 @@ class DeploymentContractTests(SimpleTestCase):
     def read(self, relative):
         return (self.root / relative).read_text(encoding="utf-8")
 
+    def test_default_openai_setup_has_public_model_and_known_price(self):
+        env_example = self.read(".env.example")
+        wizard = self.read("deployment/setup-wizard.sh")
+        price_json = '{"gpt-5-mini":{"input_per_million":"0.25","cached_input_per_million":"0.025","output_per_million":"2.00"}}'
+
+        self.assertIn("OPENAI_MODEL=gpt-5-mini", env_example)
+        self.assertIn(f"OPENAI_PRICES_JSON={price_json}", env_example)
+        self.assertIn('write_env OPENAI_MODEL "$OPENAI_MODEL"', wizard)
+        self.assertIn(f'OPENAI_PRICES_JSON=\'{price_json}\'', wizard)
+        self.assertIn('write_env OPENAI_PRICES_JSON "$OPENAI_PRICES_JSON"', wizard)
+        self.assertIn('ask OPENAI_PRICES_JSON "OPENAI_PRICES_JSON for $OPENAI_MODEL:"', wizard)
+        self.assertIn('OPENAI_PRICES_JSON is required for a custom model', wizard)
+        self.assertIn("exit 1", wizard)
+
     def test_dockerignore_recursively_excludes_runtime_and_secrets(self):
         value = self.read(".dockerignore")
         for pattern in (

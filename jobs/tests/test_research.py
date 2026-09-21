@@ -686,7 +686,7 @@ class ResearchServiceTests(TestCase):
 
     def test_auto_falls_back_on_explicit_quota_and_keeps_actual_page_as_evidence(self):
         self.profile.preferences = {
-            "daily_budget_usd": "1.00", "search_provider": "auto", "openai_model": "gpt-5.6-luna",
+            "daily_budget_usd": "1.00", "search_provider": "auto", "openai_model": "gpt-5-mini",
         }
         self.profile.save(update_fields=["preferences"])
         calls = {"tavily": 0, "brave": 0}

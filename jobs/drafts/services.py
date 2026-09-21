@@ -7,6 +7,7 @@ from datetime import timedelta
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 from jobs.intelligence.gateway import GatewayError, GatewayUnavailable, OpenAIGateway
+from jobs.intelligence.config import DEFAULT_OPENAI_MODEL
 from jobs.intelligence.research import research as research_company
 from jobs.models.models import Draft, ProfileFact, Research
 
@@ -38,7 +39,7 @@ def _gateway(profile):
     except (TypeError, ValueError):
         prices = {}
     return OpenAIGateway(
-        model=(profile.preferences or {}).get("openai_model", "gpt-5.6-luna"),
+        model=(profile.preferences or {}).get("openai_model", DEFAULT_OPENAI_MODEL),
         prices=prices if isinstance(prices, dict) else {},
     )
 

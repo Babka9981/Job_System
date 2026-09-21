@@ -6,6 +6,7 @@ from django.http import HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
 
 from jobs.core.access import owner_required
+from jobs.intelligence.config import DEFAULT_OPENAI_MODEL
 from jobs.intelligence.gateway import GatewayError, GatewayUnavailable, OpenAIGateway
 from jobs.models.models import Profile, Resume
 from .extractors import ResumeExtractionError
@@ -42,7 +43,7 @@ DEFAULT_CRITERIA = {
 DEFAULT_PREFERENCES = {
     "response_language": "ru", "tone": "professional", "length": "short", "emphasis": "",
     "schedule": ["09:00", "13:00", "17:00", "21:00"], "daily_budget_usd": "0.0000",
-    "openai_model": "gpt-5.6-luna", "search_provider": "auto",
+    "openai_model": DEFAULT_OPENAI_MODEL, "search_provider": "auto",
 }
 
 
@@ -226,7 +227,7 @@ def extract(request, resume_id):
     try:
         extract_profile(
             resume,
-            gateway=_gateway(model=profile.preferences.get("openai_model", "gpt-5.6-luna")),
+            gateway=_gateway(model=profile.preferences.get("openai_model", DEFAULT_OPENAI_MODEL)),
             daily_limit=profile.preferences.get("daily_budget_usd"),
         )
     except GatewayUnavailable as exc:

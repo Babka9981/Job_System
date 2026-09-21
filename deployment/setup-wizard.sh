@@ -193,9 +193,21 @@ say "Create a project API key. It is stored only in the local env file."
 open_url "https://platform.openai.com/api-keys"
 step "Create or select a project, create a secret key, and copy it once."
 ask_secret OPENAI_API_KEY "Paste OPENAI_API_KEY:"
-ask OPENAI_MODEL "Model name (recommended: gpt-5.6-luna):"
+ask OPENAI_MODEL "Model name (recommended: gpt-5-mini):"
+OPENAI_MODEL="${OPENAI_MODEL:-gpt-5-mini}"
+if [[ "$OPENAI_MODEL" == "gpt-5-mini" ]]; then
+  OPENAI_PRICES_JSON='{"gpt-5-mini":{"input_per_million":"0.25","cached_input_per_million":"0.025","output_per_million":"2.00"}}'
+else
+  say "A custom model is fail-closed until you provide its input/output prices per million tokens."
+  ask OPENAI_PRICES_JSON "OPENAI_PRICES_JSON for $OPENAI_MODEL:"
+  if [[ -z "$OPENAI_PRICES_JSON" ]]; then
+    warn "OPENAI_PRICES_JSON is required for a custom model. Re-run setup with a known price."
+    exit 1
+  fi
+fi
 write_env OPENAI_API_KEY "$OPENAI_API_KEY"
-write_env OPENAI_MODEL "${OPENAI_MODEL:-gpt-5.6-luna}"
+write_env OPENAI_MODEL "$OPENAI_MODEL"
+write_env OPENAI_PRICES_JSON "$OPENAI_PRICES_JSON"
 
 stage "Tavily search"
 say "Create a Tavily API key for the primary web-search provider."

@@ -2,6 +2,8 @@ from django import forms
 from django.core.exceptions import ValidationError
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from jobs.intelligence.config import DEFAULT_OPENAI_MODEL
+
 
 class StyledForm(forms.Form):
     def __init__(self, *args, **kwargs):
@@ -53,7 +55,7 @@ class ProfileSettingsForm(StyledForm):
     openai_model = forms.RegexField(
         label="Модель OpenAI",
         regex=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$",
-        initial="gpt-5.6-luna",
+        initial=DEFAULT_OPENAI_MODEL,
         error_messages={"invalid": "Укажите корректное имя модели OpenAI."},
     )
     search_provider = forms.ChoiceField(

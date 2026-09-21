@@ -20,6 +20,7 @@ from jobs.intelligence.budget import (
     settle_usage,
 )
 from jobs.intelligence.fetch import FetchError, PublicFetcher
+from jobs.intelligence.config import DEFAULT_OPENAI_MODEL
 from jobs.intelligence.gateway import GatewayError, GatewayUnavailable, OpenAIGateway
 from jobs.intelligence.search import BraveSearchProvider, SearchProviderError, SearchProviderUnavailable, TavilySearchProvider
 from jobs.models.models import ProfileFact, Research
@@ -768,7 +769,7 @@ def research(
     if pages and clock() < deadline:
         try:
             selected_gateway = gateway or _default_gateway(
-                model=(profile.preferences or {}).get("openai_model", "gpt-5.6-luna") if profile else "gpt-5.6-luna",
+                model=(profile.preferences or {}).get("openai_model", DEFAULT_OPENAI_MODEL) if profile else DEFAULT_OPENAI_MODEL,
             )
             if not _deadline_aware(selected_gateway.structured):
                 raise GatewayUnavailable("unsafe_transport", "Gateway не поддерживает отменяемый deadline.")

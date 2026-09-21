@@ -1,4 +1,5 @@
 import io
+import os
 import tempfile
 import zipfile
 from pathlib import Path
@@ -464,7 +465,7 @@ class ProfileHttpTests(TestCase):
             "timezone": "Mars/Olympus", "languages": "", "response_language": "ru",
             "tone": "professional", "length": "short", "emphasis": "", "schedule": "09:00",
             "daily_budget_usd": "1.0000",
-            "openai_model": "gpt-5.6-luna", "search_provider": "auto",
+            "openai_model": "gpt-5-mini", "search_provider": "auto",
         })
 
         self.assertEqual(response.status_code, 400)
@@ -475,7 +476,7 @@ class ProfileHttpTests(TestCase):
     def test_ai_settings_defaults_are_visible_and_invalid_values_are_not_saved(self):
         response = self.client.get(reverse("profile"))
         self.assertContains(response, "Суточный бюджет, USD")
-        self.assertContains(response, "gpt-5.6-luna")
+        self.assertContains(response, "gpt-5-mini")
         self.assertContains(response, "Автоматически")
         profile = Profile.objects.get(owner=self.owner)
         payload = {
@@ -491,6 +492,30 @@ class ProfileHttpTests(TestCase):
         self.assertContains(response, "корректное имя модели", status_code=400)
         profile.refresh_from_db()
         self.assertEqual(profile.version, 1)
+
+    @patch.dict(os.environ, {
+        "OPENAI_API_KEY": "fixture-key",
+        "OPENAI_PRICES_JSON": '{"gpt-5-mini":{"input_per_million":"0.25","cached_input_per_million":"0.025","output_per_million":"2.00"}}',
+    }, clear=False)
+    @patch("jobs.profile.views.extract_profile")
+    def test_default_profile_extraction_uses_public_model_with_known_price(self, extract):
+        self.client.get(reverse("profile"))
+        profile = Profile.objects.get(owner=self.owner)
+        resume = Resume.objects.create(
+            profile=profile, private_path="private/cv.docx",
+            text="[Блок 1] Product manager", extraction_state="complete",
+        )
+
+        response = self.client.post(reverse("profile-extract", args=[resume.pk]))
+
+        self.assertRedirects(response, reverse("profile"))
+        gateway = extract.call_args.kwargs["gateway"]
+        self.assertEqual(gateway.model, "gpt-5-mini")
+        self.assertEqual(gateway.prices["gpt-5-mini"], {
+            "input_per_million": "0.25",
+            "cached_input_per_million": "0.025",
+            "output_per_million": "2.00",
+        })
 
     def test_upload_extract_confirm_enforce_owner_and_csrf_and_magic_mismatch_is_manual_fallback(self):
         profile = Profile.objects.create(owner=self.owner)
@@ -529,7 +554,7 @@ class ProfileHttpTests(TestCase):
         self.assertContains(response, "Суточный лимит исчерпан")
         self.assertContains(response, "tone-warning")
         self.assertFalse(profile.facts.exists())
-        gateway_factory.assert_called_once_with(model="gpt-5.6-luna")
+        gateway_factory.assert_called_once_with(model="gpt-5-mini")
 
     def test_unresolved_and_rejected_questions_remain_visible_after_confirm(self):
         profile = Profile.objects.create(owner=self.owner)
