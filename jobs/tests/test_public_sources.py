@@ -841,6 +841,13 @@ class SourceScreenTests(TestCase):
         self.assertContains(response, "aria-current=\"page\"")
         self.assertContains(response, reverse("manage"))
         self.assertContains(response, "Управлять Telegram-каналами")
+        self.assertContains(response, 'class="field-grid sources-metrics"')
+        self.assertContains(response, 'class="ui-card sources-table-card"')
+        self.assertContains(response, 'class="table-container sources-table-container"')
+        self.assertContains(response, 'class="sources-table"')
+        self.assertContains(response, '<col class="sources-column sources-column--name">', html=True)
+        self.assertContains(response, '<th scope="col">Источник</th>', html=True)
+        self.assertEqual(response.content.count(b'<col class="sources-column'), 10)
 
     def test_invalid_interval_is_rendered_fail_closed_instead_of_500(self):
         seed_sources(self.owner)

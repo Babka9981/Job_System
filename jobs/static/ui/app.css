@@ -2,3 +2,33 @@
 @media(max-width:62rem){.app-shell{padding-left:0}.sidebar{transform:translateX(-100%);box-shadow:.5rem 0 2rem var(--shadow-lg)}.drawer-open .sidebar{transform:none}.shell-sidebar-hidden .sidebar{transform:translateX(-100%)}.user-name{display:none}}
 @media(max-width:42rem){.topbar{align-items:flex-start;flex-wrap:wrap}.topbar-actions{width:100%;margin-left:0}.button{flex:1}.page-heading{display:block}.field-grid{grid-template-columns:1fr}}
 .form-control{width:100%;min-width:0;min-height:2.75rem;padding:.65rem .75rem;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-canvas);color:var(--text-primary);font:inherit}textarea.form-control{resize:vertical}
+
+/* Sources registry: its wide data set scrolls inside the card, never on the page. */
+.sources-metrics{margin-bottom:1rem}
+.sources-metric{display:grid;align-content:start;gap:.5rem}
+.sources-metric strong{font-size:1.05rem}
+.sources-metric p{margin:0;color:var(--text-secondary)}
+.sources-table-card{padding:0;overflow:hidden}
+.sources-table-heading{margin:0;padding:1.25rem}
+.sources-table-container{max-height:min(70vh,52rem);overflow:auto;overscroll-behavior:contain;border-top:1px solid var(--border-subtle);scrollbar-gutter:stable}
+.sources-table-container:focus-visible{outline-offset:-3px}
+.sources-table{width:123.5rem;min-width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0;font-size:.875rem;line-height:1.45}
+.sources-column--name{width:13rem}
+.sources-column--enabled{width:6rem}
+.sources-column--status{width:11.5rem}
+.sources-column--mode{width:11rem}
+.sources-column--checked,.sources-column--success{width:11rem}
+.sources-column--coverage{width:14rem}
+.sources-column--reason{width:22rem}
+.sources-column--interval,.sources-column--freshness{width:12rem}
+.sources-table th,.sources-table td{padding:.8rem 1rem;text-align:left;vertical-align:top;border-bottom:1px solid var(--border-subtle)}
+.sources-table thead th{position:sticky;top:0;z-index:2;background:var(--surface-sunken);color:var(--text-primary);font-size:.78rem;line-height:1.35;font-weight:700}
+.sources-table tbody th{position:sticky;left:0;z-index:1;background:var(--surface-raised);font-weight:700}
+.sources-table thead th:first-child{left:0;z-index:3;color:var(--text-primary)}
+.sources-table tbody tr:hover td,.sources-table tbody tr:hover th{background:var(--surface-hover)}
+.sources-table tbody tr:last-child th,.sources-table tbody tr:last-child td{border-bottom:0}
+.sources-table .status-badge{max-width:100%;line-height:1.35;white-space:normal;overflow-wrap:normal;word-break:normal}
+.sources-cell--compact,.sources-cell--date{white-space:nowrap}
+.sources-cell--reason{overflow-wrap:anywhere}
+.sources-table-empty{padding:2rem;text-align:center;color:var(--text-secondary)}
+@media(max-width:42rem){.sources-table-heading{padding:1rem}.sources-table th,.sources-table td{padding:.7rem .8rem}}

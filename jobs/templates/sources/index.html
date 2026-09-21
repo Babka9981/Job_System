@@ -5,33 +5,45 @@
   <div class="action-group"><a class="button button-primary" href="{% url 'manage' %}">Управлять Telegram-каналами</a></div>
 </header>
 
-<div class="field-grid" aria-label="Состав реестра">
-  <section class="ui-card" aria-label="Всего источников"><strong>{{ total_count }} источников</strong><p>Сайты и Telegram-каналы</p></section>
-  <section class="ui-card" aria-label="Сайты"><strong>{{ site_count }} сайтов</strong><p>Только поддержанные способы доступа</p></section>
-  <section class="ui-card" aria-label="Telegram"><strong>{{ telegram_count }} Telegram</strong><p>Требуют пользовательскую сессию</p></section>
+<div class="field-grid sources-metrics" aria-label="Состав реестра">
+  <section class="ui-card sources-metric" aria-label="Всего источников"><strong>{{ total_count }} источников</strong><p>Сайты и Telegram-каналы</p></section>
+  <section class="ui-card sources-metric" aria-label="Сайты"><strong>{{ site_count }} сайтов</strong><p>Только поддержанные способы доступа</p></section>
+  <section class="ui-card sources-metric" aria-label="Telegram"><strong>{{ telegram_count }} Telegram</strong><p>Требуют пользовательскую сессию</p></section>
 </div>
 
-<section class="ui-card">
-  <h2>Состояние подключений</h2>
-  <div class="table-container" role="region" aria-label="Реестр источников" tabindex="0">
-    <table>
-      <thead><tr><th>Источник</th><th>Включён</th><th>Статус</th><th>Режим</th><th>Последняя проверка</th><th>Последний успех</th><th>Покрытие</th><th>Ошибка / причина</th><th>Интервал сервиса</th><th>Свежесть поставщика</th></tr></thead>
+<section class="ui-card sources-table-card">
+  <h2 class="sources-table-heading">Состояние подключений</h2>
+  <div class="table-container sources-table-container" role="region" aria-label="Реестр источников" tabindex="0">
+    <table class="sources-table">
+      <colgroup>
+        <col class="sources-column sources-column--name">
+        <col class="sources-column sources-column--enabled">
+        <col class="sources-column sources-column--status">
+        <col class="sources-column sources-column--mode">
+        <col class="sources-column sources-column--checked">
+        <col class="sources-column sources-column--success">
+        <col class="sources-column sources-column--coverage">
+        <col class="sources-column sources-column--reason">
+        <col class="sources-column sources-column--interval">
+        <col class="sources-column sources-column--freshness">
+      </colgroup>
+      <thead><tr><th scope="col">Источник</th><th scope="col">Включён</th><th scope="col">Статус</th><th scope="col">Режим</th><th scope="col">Последняя проверка</th><th scope="col">Последний успех</th><th scope="col">Покрытие</th><th scope="col">Ошибка / причина</th><th scope="col">Интервал сервиса</th><th scope="col">Свежесть поставщика</th></tr></thead>
       <tbody>
       {% for row in rows %}
         <tr>
           <th scope="row">{{ row.source.name }}</th>
-          <td>{% if row.source.enabled %}Да{% else %}Нет{% endif %}</td>
-          <td>{% include "shared/status_badge.html" with tone=row.tone label=row.status_label %}</td>
+          <td class="sources-cell--compact">{% if row.source.enabled %}Да{% else %}Нет{% endif %}</td>
+          <td class="sources-cell--badge">{% include "shared/status_badge.html" with tone=row.tone label=row.status_label %}</td>
           <td>{{ row.mode }}</td>
-          <td>{{ row.last_check }}</td>
-          <td>{{ row.last_success }}</td>
+          <td class="sources-cell--date">{{ row.last_check }}</td>
+          <td class="sources-cell--date">{{ row.last_success }}</td>
           <td>{{ row.coverage_reason }}</td>
-          <td>{% if row.error != "Нет" %}<span role="alert">{{ row.error }}</span>{% else %}{{ row.reason }}{% endif %}</td>
+          <td class="sources-cell--reason">{% if row.error != "Нет" %}<span role="alert">{{ row.error }}</span>{% else %}{{ row.reason }}{% endif %}</td>
           <td>{{ row.service_interval }}</td>
           <td>{{ row.provider_freshness }}</td>
         </tr>
       {% empty %}
-        <tr><td colspan="10">Реестр пока пуст.</td></tr>
+        <tr><td class="sources-table-empty" colspan="10">Реестр пока пуст.</td></tr>
       {% endfor %}
       </tbody>
     </table>

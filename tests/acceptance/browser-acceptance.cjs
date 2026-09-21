@@ -140,6 +140,34 @@ async function assertPage(page, baseURL, route, viewport, theme, consoleProblems
   const zoomOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   assert(zoomOverflow <= 1, `${route.path}: 200% text overflow ${zoomOverflow}px at ${viewport.width}`);
   await page.evaluate(() => { document.documentElement.style.fontSize = ""; });
+  if (route.path === "/sources/") {
+    const geometry = await page.locator(".sources-table-container").evaluate((container) => {
+      container.scrollLeft = 200;
+      container.scrollTop = 100;
+      const table = container.querySelector(".sources-table");
+      const firstColumn = container.querySelector("tbody th[scope='row']");
+      const columnHeader = container.querySelector("thead th:nth-child(2)");
+      const containerRect = container.getBoundingClientRect();
+      const firstColumnRect = firstColumn.getBoundingClientRect();
+      const columnHeaderRect = columnHeader.getBoundingClientRect();
+      return {
+        hasHorizontalOverflow: container.scrollWidth > container.clientWidth,
+        hasVerticalOverflow: container.scrollHeight > container.clientHeight,
+        scrolledHorizontally: container.scrollLeft > 0,
+        scrolledVertically: container.scrollTop > 0,
+        firstColumnPosition: getComputedStyle(firstColumn).position,
+        headerPosition: getComputedStyle(columnHeader).position,
+        firstColumnOffset: Math.abs(firstColumnRect.left - containerRect.left),
+        headerOffset: Math.abs(columnHeaderRect.top - containerRect.top),
+        tableWiderThanRegion: table.getBoundingClientRect().width > containerRect.width,
+      };
+    });
+    assert(geometry.hasHorizontalOverflow && geometry.tableWiderThanRegion, `${route.path}: table does not own horizontal overflow at ${viewport.width}`);
+    assert(geometry.hasVerticalOverflow, `${route.path}: table region does not own vertical overflow at ${viewport.width}`);
+    assert(geometry.scrolledHorizontally && geometry.scrolledVertically, `${route.path}: table region is not locally scrollable at ${viewport.width}`);
+    assert(geometry.firstColumnPosition === "sticky" && geometry.firstColumnOffset <= 1, `${route.path}: first column is not sticky at ${viewport.width}`);
+    assert(geometry.headerPosition === "sticky" && geometry.headerOffset <= 1, `${route.path}: header is not sticky at ${viewport.width}`);
+  }
   const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
   const severe = axe.violations.filter((item) => item.impact === "serious" || item.impact === "critical");
   assert(severe.length === 0, `${route.path}: axe ${severe.map((item) => item.id).join(",")}`);
