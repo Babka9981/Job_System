@@ -214,3 +214,8 @@ Content permission проверяется до LLM; CV/Search/Jobs недове�
 
 - Worker нормализует `socket_timeout` в диапазон `0.1–120.0` секунд с default `30.0`.
 - `run_http_exchange(..., deadline=...)` остаётся владельцем абсолютного hard deadline и kill/reap subprocess; worker cap больше не обрезает OpenAI timeout до 30 секунд.
+
+# Из таска 19 — OpenAI transport timeout
+
+- `OpenAIResponsesTransport.create_response(...)` сохраняет публичную сигнатуру; внутренний default deadline теперь 120 секунд.
+- Явный более короткий deadline никогда не расширяется; истёкший отклоняется до запуска HTTP subprocess.

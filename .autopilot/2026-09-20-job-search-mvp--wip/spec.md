@@ -325,3 +325,15 @@ connection получает socket timeout больше 30 секунд при �
 отдельно сохраняются clamp для невалидных/чрезмерных значений и существующие deadline,
 network/error, body-size и secret-isolation контракты. После deploy повтор выполняется
 только через budget-enforced gateway; uncertain прошлые попытки остаются pending.
+
+## S17. OpenAI transport использует полный bounded timeout
+
+`OpenAIResponsesTransport` не должен создавать отдельный меньший лимит 45 секунд поверх
+worker maximum 120 секунд. Default request timeout задаётся централизованно и передаётся
+как hard deadline в `run_http_exchange`; socket timeout равен оставшемуся времени в
+границах worker. Явный caller deadline по-прежнему имеет приоритет и не расширяется.
+
+Regression test без сети фиксирует: default transport передаёт примерно 120 секунд,
+явный короткий deadline остаётся коротким, истёкший deadline fail-closed, budget
+reservation settle/pending семантика не меняется, secrets/CV не попадают в argv/env/log.
+Production retry выполняется штатным profile service и обязан создать сохраняемый draft.
