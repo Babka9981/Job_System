@@ -12,7 +12,7 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/IliaF/.codex/skills/autopilot",
   "startedAt": "2026-09-20T15:27:16+03:00",
-  "updatedAt": "2026-09-21T01:30:00+03:00",
+  "updatedAt": "2026-09-21T04:06:19+03:00",
   "finishedAt": null,
   "stages": [
     {"id":"preflight","status":"done","startedAt":"2026-09-20T15:27:16+03:00","finishedAt":"2026-09-20T15:46:44+03:00","note":"Репозиторий и исходные документы проверены"},
@@ -20,11 +20,11 @@ window.STATE =
     {"id":"briefing","status":"done","finishedAt":"2026-09-20T15:46:44+03:00","note":"OpenAI, настраиваемый поиск, CV extraction; search provider уточняется перед T08"},
     {"id":"spec","status":"done","finishedAt":"2026-09-20T15:46:44+03:00","note":"Независимая проверка пройдена"},
     {"id":"plan","status":"done","finishedAt":"2026-09-20T15:46:44+03:00","note":"12 тикетов; реализация ожидает команды"},
-    {"id":"build","status":"active","startedAt":"2026-09-20T16:05:00+03:00","note":"T01–T04 и T07 завершены; готова волна T05/T06/T08"},
-    {"id":"review","status":"active","startedAt":"2026-09-20T16:40:00+03:00","note":"T01: manifest/spec и craft review"},
+    {"id":"build","status":"active","startedAt":"2026-09-20T16:05:00+03:00","note":"T01–T11 и T13 завершены; далее T12 acceptance"},
+    {"id":"review","status":"active","startedAt":"2026-09-20T16:40:00+03:00","note":"Приняты T01–T11 и T13; craft concerns сохранены для whole-project pass"},
     {"id":"final","status":"pending"}
   ],
-  "requirements":{"total":78,"done":36,"inTicket":42,"inSpec":0,"placeholder":0,"deferred":0,"dropped":0},
+  "requirements":{"total":85,"done":81,"inTicket":4,"inSpec":0,"placeholder":0,"deferred":0,"dropped":0},
   "tickets":[
   {
     "id": "01",
@@ -196,9 +196,13 @@ window.STATE =
       "jobs/sources/rvc/",
       "jobs/tests/test_keyed_sources.py"
     ],
-    "status": "pending",
-    "retries": 0,
-    "repairs": 0,
+    "status": "done",
+    "startedAt": "2026-09-21T01:42:21+03:00",
+    "finishedAt": "2026-09-21T02:08:41+03:00",
+    "commit": "ec8dec1",
+    "tests": "Django 288/288 (1 skipped); keyed+public 74; Node 6/6; migration drift none; pip check clean",
+    "retries": 2,
+    "repairs": 3,
     "handoffs": 0,
     "githubIssue": "https://github.com/Babka9981/Job_System/issues/5"
   },
@@ -223,7 +227,11 @@ window.STATE =
       "jobs/templates/sources/telegram/",
       "jobs/tests/test_telegram.py"
     ],
-    "status": "pending",
+    "status": "done",
+    "startedAt": "2026-09-21T01:40:00+03:00",
+    "finishedAt": "2026-09-21T02:08:41+03:00",
+    "commit": "c72d8e8",
+    "tests": "Django 288/288 (1 skipped); T06 accepted 42/42; Node 6/6; migration drift none",
     "retries": 0,
     "repairs": 0,
     "handoffs": 0,
@@ -264,6 +272,7 @@ window.STATE =
     "status": "done",
     "startedAt": "2026-09-20T22:18:00+03:00",
     "finishedAt": "2026-09-21T01:30:00+03:00",
+    "commit": "269b1f8",
     "tests": "T07 29/29; full Django 146/146; Node 6/6; migration drift none",
     "retries": 1,
     "repairs": 1,
@@ -300,9 +309,13 @@ window.STATE =
       "jobs/intelligence/fetch/",
       "jobs/tests/test_research.py"
     ],
-    "status": "pending",
-    "retries": 0,
-    "repairs": 0,
+    "status": "done",
+    "startedAt": "2026-09-21T01:40:00+03:00",
+    "finishedAt": "2026-09-21T02:03:44+03:00",
+    "commit": "478b8b2",
+    "tests": "Django 288/288 (1 skipped); Node 6/6; migration drift none; pip check clean",
+    "retries": 2,
+    "repairs": 3,
     "handoffs": 0,
     "githubIssue": "https://github.com/Babka9981/Job_System/issues/8"
   },
@@ -332,9 +345,13 @@ window.STATE =
       "jobs/templates/vacancies/drafts/",
       "jobs/tests/test_drafts.py"
     ],
-    "status": "pending",
+    "status": "done",
+    "startedAt": "2026-09-21T02:10:50+03:00",
+    "finishedAt": "2026-09-21T03:13:21+03:00",
+    "commit": "2e0dd65",
+    "tests": "Django 336/336 (1 skipped); T09 20; Node 8/8; migration drift none; pip check clean",
     "retries": 0,
-    "repairs": 0,
+    "repairs": 3,
     "handoffs": 0,
     "githubIssue": "https://github.com/Babka9981/Job_System/issues/9"
   },
@@ -360,9 +377,13 @@ window.STATE =
       "jobs/notifications/",
       "jobs/tests/test_monitoring.py"
     ],
-    "status": "pending",
+    "status": "done",
+    "startedAt": "2026-09-21T02:10:50+03:00",
+    "finishedAt": "2026-09-21T03:13:21+03:00",
+    "commit": "5e5cca4",
+    "tests": "Django 336/336 (1 skipped); T10 21; Node 8/8; migration drift none; pip check clean",
     "retries": 0,
-    "repairs": 0,
+    "repairs": 3,
     "handoffs": 0,
     "githubIssue": "https://github.com/Babka9981/Job_System/issues/10"
   },
@@ -389,7 +410,11 @@ window.STATE =
       "jobs/operations/",
       "docs/operations/"
     ],
-    "status": "pending",
+    "status": "done",
+    "startedAt": "2026-09-21T03:16:01+03:00",
+    "finishedAt": "2026-09-21T04:06:19+03:00",
+    "commit": "670607f",
+    "tests": "Django 345/345 (1 skipped); operations 9/9; Node 8/8; migration drift none; pip check clean; deploy check clean; compose/bash/wizard clean; local image health/restart smoke passed",
     "retries": 0,
     "repairs": 0,
     "handoffs": 0,
@@ -415,7 +440,8 @@ window.STATE =
       "08",
       "09",
       "10",
-      "11"
+      "11",
+      "13"
     ],
     "wave": 7,
     "zone": [
@@ -427,6 +453,23 @@ window.STATE =
     "repairs": 0,
     "handoffs": 0,
     "githubIssue": "https://github.com/Babka9981/Job_System/issues/12"
+  },
+  {
+    "id": "13",
+    "title": "Настройки AI и резервный Brave Search",
+    "requirements": ["G08","G09","G01","R45","R50","R51","R52","R64"],
+    "blockedBy": ["03","08"],
+    "wave": 5,
+    "zone": ["jobs/intelligence/search/","jobs/intelligence/research/","jobs/profile/","jobs/templates/profile/","jobs/tests/test_research.py","jobs/tests/test_profile.py",".env.example"],
+    "status": "done",
+    "startedAt": "2026-09-21T02:03:44+03:00",
+    "finishedAt": "2026-09-21T03:13:21+03:00",
+    "commit": "3dae049",
+    "tests": "Django 336/336 (1 skipped); T13 109; Node 8/8; migration drift none; pip check clean",
+    "retries": 0,
+    "repairs": 1,
+    "handoffs": 0,
+    "githubIssue": null
   }
 ],"singlePass":null,"tests":null,
   "debt":{"placeholders":[],"assumptions":[],"emptyEnv":[]},

@@ -138,3 +138,42 @@ Content permission проверяется до LLM; CV/Search/Jobs недове�
   `drawer.js` — единственный владелец регистрации toggle-click.
 - Проверки: `manage.py test`, `manage.py migrate`, `manage.py check --deploy`,
   `manage.py makemigrations --check --dry-run`.
+# Из recovery таска 08 — пользовательский путь исследования
+
+- `POST /vacancies/<vacancy_id>/research/` (`vacancy-research`) принимает `domain` и `refresh=0|1`.
+- Карточка вакансии получает `latest_research` и показывает progress, evidence, sources, conflicts, hypotheses и profile cases.
+- Подтверждённый нормализованный домен сохраняется в `Vacancy.company_domain` с увеличением версии.
+
+# Из recovery таска 05 — keyed API и RVC
+
+- `RvcStreamableHttpToolCaller(client_factory=None, timeout=20)` — production Streamable HTTP MCP boundary.
+- `default_adapters()` подключает RVC через exact endpoint `https://app.rvc.global/mcp`; live вызов остаётся выключаемым source state.
+- Remote Rocketship резервирует job capacity отдельно для каждой uncertain retry attempt; paid adapters по умолчанию выключены.
+
+# Из таска 13 — AI-настройки и Brave
+
+- `BraveSearchProvider.search(query, max_results=5, deadline=None, clock=None) -> list[SearchHit]`.
+- `Profile.preferences.openai_model` по умолчанию `gpt-5.6-luna`; `search_provider` — `auto|tavily|brave`.
+- `Research.coverage.provider_attempts[] = {query, provider, outcome}` сохраняет прозрачный fallback provenance.
+- Секреты/стоимость: `BRAVE_SEARCH_API_KEY`, `BRAVE_LLM_CONTEXT_COST_USD`; неизвестная цена закрывает платный вызов.
+
+# Из таска 10 — мониторинг и Telegram Bot
+
+- `run_cycle(owner, *, adapters, evaluator, collector, transport, now, schedule_slot) -> Run`.
+- `schedule_decision(*, now, timezone_name, slots) -> ScheduleDecision` учитывает timezone/DST.
+- `deliver_digest(run, *, transport) -> NotificationOutbox | None`; `retry_delivery(...)` и `reconcile_delivery(...)` управляют uncertain delivery.
+- `TelegramBotTransport(token=None, chat_id=None, timeout=10, opener=None)` использует отдельные `TELEGRAM_BOT_TOKEN` и `TELEGRAM_OWNER_CHAT_ID`, независимо от MTProto reader.
+
+# Из таска 09 — черновики откликов
+
+- `generate(vacancy, profile, kind, *, language, tone, length, accent, user_note, refresh, gateway, research_service) -> Draft`.
+- UI: `GET /vacancies/<id>/drafts/`, `POST .../<kind>/generate/`, `POST .../<kind>/save/`.
+- Генерация требует current confirmed profile и exact JD permission/hash; ошибка провайдера сохраняет предыдущий текст.
+
+# Из таска 11 — операции и deployment bundle
+
+- `GET /healthz/` — production health boundary без раскрытия приватных данных.
+- Compose project `job-system` слушает только `127.0.0.1:18111`; Caddy публикует `job.web3babka.su` отдельным site block.
+- Operations CLI выполняет TTL cleanup, SQLite snapshot и restore verification; backup шифруется `age` public recipient, identity хранится вне VPS.
+- Backup retention 30 дней удаляется только после новой успешной копии и всегда сохраняет newest.
+- `scripts/setup-integrations.sh` — repeatable 7-stage local `.env` wizard; MTProto stage можно отложить.

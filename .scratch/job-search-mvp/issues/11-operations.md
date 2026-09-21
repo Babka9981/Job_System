@@ -1,7 +1,7 @@
 # 11 — VPS, HTTPS, резервирование и срок хранения
 
-Status: ready-for-agent
-Execution: not-started; запуск только по отдельной команде пользователя
+Status: done
+Execution: completed locally; remote deploy intentionally not performed
 GitHub-Issue: #11 — https://github.com/Babka9981/Job_System/issues/11
 Blocked by: 05,06,09,10
 Волна: 6
@@ -32,13 +32,13 @@ VPS, HTTPS, резервирование и срок хранения. Полн�
 
 ## Критерии приёмки
 
-- [ ] Docker Compose Django+SQLite persistent disk+Caddy и OS scheduler config документированы, secrets private.
-- [ ] Production checks hosts/CSRF/secure cookies/DEBUG; private CV/session недоступны из static/media.
-- [ ] TTL cleanup во всех чтениях и перед backup; Rocketship raw/derived/temporary исключены из постоянных копий.
-- [ ] Backup/restore проверяет profile/user status/checkpoint/CV, без credentials и TTL data.
-- [ ] VPS readiness checklist ресурсы/порты/существующие сервисы/domain/outbound доступ выполнен до deploy.
-- [ ] Локальный restart smoke, health, migrations, operator env setup без вывода ключей.
-- [ ] Без VPS доступа пакет готовности отмечен, удалённый deploy не заявляется выполненным.
+- [x] Docker Compose Django+SQLite persistent disk+Caddy и OS scheduler config документированы, secrets private.
+- [x] Production checks hosts/CSRF/secure cookies/DEBUG; private CV/session недоступны из static/media.
+- [x] TTL cleanup во всех чтениях и перед backup; Rocketship raw/derived/temporary исключены из постоянных копий.
+- [x] Backup/restore проверяет profile/user status/checkpoint/CV, без credentials и TTL data.
+- [x] VPS readiness checklist ресурсы/порты/существующие сервисы/domain/outbound доступ выполнен до deploy.
+- [x] Локальный restart smoke, health, migrations, operator env setup без вывода ключей.
+- [x] Без VPS доступа пакет готовности отмечен, удалённый deploy не заявляется выполненным.
 
 ## Проверки и свидетельства
 
