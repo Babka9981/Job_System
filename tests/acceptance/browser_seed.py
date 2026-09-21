@@ -15,7 +15,7 @@ django.setup()
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
-from jobs.models.models import Draft, Profile, ProfileFact, Research, SourceRecord, Vacancy
+from jobs.models.models import Draft, Profile, ProfileFact, Research, Resume, SourceRecord, Vacancy
 from jobs.sources.core.registry import seed_sources
 
 
@@ -28,6 +28,17 @@ profile = Profile.objects.create(
     about="Product leader",
     criteria={"roles": ["Product Manager"], "industries": ["fintech"]},
     preferences={"daily_budget_usd": "5.00", "openai_model": "fixture"},
+)
+Resume.objects.create(
+    profile=profile,
+    private_path="private/browser-fixture.docx",
+    extraction_state=Resume.ExtractionState.COMPLETE,
+    text=(
+        "Browser fixture introduction\n\n"
+        "[Блок 1] Product leadership\n"
+        "[UNKNOWN] preserved fixture line\n"
+        "[Страница 2] https://example.test/" + "long-unbroken-segment-" * 20
+    ),
 )
 fact = ProfileFact.objects.create(
     profile=profile,

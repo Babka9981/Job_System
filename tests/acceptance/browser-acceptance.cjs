@@ -134,6 +134,22 @@ async function assertPage(page, baseURL, route, viewport, theme, consoleProblems
   const response = await page.goto(`${baseURL}${route.path}`, { waitUntil: "networkidle" });
   await assertProtectedPage(page, response, route, baseURL);
   assert(await page.locator("html").getAttribute("data-theme") === theme, `${route.path}: theme ${theme} missing`);
+  if (route.path === "/profile/") {
+    const review = page.locator(".resume-review");
+    const reviewSummary = review.locator(":scope > summary");
+    await reviewSummary.focus();
+    await reviewSummary.press("Enter");
+    assert(await review.getAttribute("open") !== null, `${route.path}: CV preview did not open from keyboard`);
+    assert(await page.locator(".resume-preview-label").allTextContents().then((items) => items.includes("Блок 1") && items.includes("Страница 2")), `${route.path}: CV marker labels missing`);
+    assert((await page.locator(".resume-preview").textContent()).includes("[UNKNOWN] preserved fixture line"), `${route.path}: unknown CV line missing`);
+    const raw = page.locator(".resume-raw");
+    assert(await raw.getAttribute("open") === null, `${route.path}: secondary raw CV view must start closed`);
+    const rawSummary = raw.locator(":scope > summary");
+    await rawSummary.focus();
+    await rawSummary.press("Enter");
+    assert(await raw.getAttribute("open") !== null, `${route.path}: raw CV view did not open from keyboard`);
+    assert((await raw.locator("pre").textContent()).includes("long-unbroken-segment-long-unbroken-segment-"), `${route.path}: exact raw CV text missing`);
+  }
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   assert(overflow <= 1, `${route.path}: horizontal overflow ${overflow}px at ${viewport.width}`);
   await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
@@ -170,7 +186,7 @@ async function assertPage(page, baseURL, route, viewport, theme, consoleProblems
   }
   const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
   const severe = axe.violations.filter((item) => item.impact === "serious" || item.impact === "critical");
-  assert(severe.length === 0, `${route.path}: axe ${severe.map((item) => item.id).join(",")}`);
+  assert(severe.length === 0, `${route.path}: axe ${severe.map((item) => `${item.id} ${item.nodes.map((node) => node.target.join(" ")).join(" | ")}`).join("; ")}`);
   assert(consoleProblems.length === 0, `${route.path}: console ${consoleProblems.join(" | ")}`);
 }
 

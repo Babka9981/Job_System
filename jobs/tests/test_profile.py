@@ -427,6 +427,33 @@ class ProfileHttpTests(TestCase):
         for visible in ["[Блок 1] Проверяемый текст CV", "Опыт SkyPay", "Рост конверсии", "Запуск B2B", "English C1"]:
             self.assertContains(response, visible)
 
+    def test_resume_preview_is_readable_and_keeps_an_exact_secondary_raw_view(self):
+        profile = Profile.objects.create(owner=self.owner)
+        original = (
+            "Вводная строка без маркера\n\n"
+            "[Блок 1] Product lead\nПродолжение блока\n"
+            "[Неизвестно] не потерять\n"
+            "[Страница 2] https://example.test/" + "very-long-segment-" * 12
+        )
+        resume = Resume.objects.create(
+            profile=profile,
+            private_path="private/cv.docx",
+            text=original,
+            extraction_state="complete",
+        )
+
+        response = self.client.get(reverse("profile"))
+
+        self.assertContains(response, 'class="resume-preview"')
+        self.assertContains(response, '<span class="resume-preview-label">Блок 1</span>', html=True)
+        self.assertContains(response, '<span class="resume-preview-label">Страница 2</span>', html=True)
+        self.assertContains(response, "Вводная строка без маркера")
+        self.assertContains(response, "[Неизвестно] не потерять")
+        self.assertContains(response, "Исходный извлечённый текст")
+        self.assertContains(response, original)
+        resume.refresh_from_db()
+        self.assertEqual(resume.text, original)
+
     def test_invalid_timezone_is_rejected_without_saving_settings(self):
         self.client.get(reverse("profile"))
         profile = Profile.objects.get(owner=self.owner)

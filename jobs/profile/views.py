@@ -10,6 +10,7 @@ from jobs.intelligence.gateway import GatewayError, GatewayUnavailable, OpenAIGa
 from jobs.models.models import Profile, Resume
 from .extractors import ResumeExtractionError
 from .forms import ManualProfileForm, ManualResumeTextForm, ProfileSettingsForm, ResumeUploadForm, split_values
+from .presentation import build_resume_preview
 from .services import (
     ProfileVersionConflict,
     ResumeValidationError,
@@ -92,11 +93,16 @@ def _render(request, *, settings_form=None, manual_form=None, upload_form=None, 
             latest_draft = load_profile_draft(profile, unconfirmed.profile_version, token)
         except ValueError:
             pass
+    resumes = list(profile.resumes.order_by("-created_at")[:10])
     context = {
         "section": "profile", "title": "Мой профиль", "profile": profile,
         "settings_form": settings_form or ProfileSettingsForm(initial=_settings_initial(profile)),
         "manual_form": manual_form or ManualProfileForm(initial=_manual_initial(profile)),
-        "upload_form": upload_form or ResumeUploadForm(), "resumes": profile.resumes.order_by("-created_at")[:10],
+        "upload_form": upload_form or ResumeUploadForm(),
+        "resume_rows": [
+            {"resume": resume, "preview_blocks": build_resume_preview(resume.text)}
+            for resume in resumes
+        ],
         "draft": latest_draft,
         "unresolved_questions": profile.facts.filter(
             confirmed=False, kind="question", source__startswith="review:"

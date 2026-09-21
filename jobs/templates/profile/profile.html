@@ -15,12 +15,42 @@
       {% csrf_token %}{% include "profile/form_fields.html" with form=upload_form %}
       <div class="action-group"><button class="button button-primary" type="submit">Загрузить резюме</button></div>
     </form>
-    {% if resumes %}
-    <div class="table-container"><table><thead><tr><th>Дата</th><th>Статус текста</th><th>Действие</th></tr></thead><tbody>
-      {% for resume in resumes %}<tr><td>{{ resume.created_at|date:"d.m.Y H:i" }}</td><td>{{ resume.get_extraction_state_display }}</td><td>
-        {% if resume.extraction_state == 'complete' %}<details><summary>Проверить извлечённый текст</summary><pre>{{ resume.text }}</pre></details><form method="post" action="{% url 'profile-extract' resume.id %}" data-disable-on-submit>{% csrf_token %}<button class="button button-secondary" type="submit">Создать LLM-черновик</button></form>{% else %}<details><summary>Вставить текст CV</summary><form method="post" action="{% url 'profile-resume-text' resume.id %}" class="form-stack" data-disable-on-submit>{% csrf_token %}<div><label for="resume-text-{{ resume.id }}">Текст резюме</label><textarea class="form-control" id="resume-text-{{ resume.id }}" name="text" rows="8" maxlength="200000" required></textarea><small>Разделяйте смысловые блоки пустой строкой.</small></div><button class="button button-primary" type="submit">Сохранить текст</button></form></details>{% endif %}
-      </td></tr>{% endfor %}
-    </tbody></table></div>
+    {% if resume_rows %}
+    <div class="resume-list">
+      {% for row in resume_rows %}
+      {% with resume=row.resume %}
+      <article class="resume-entry">
+        <header class="resume-entry-meta">
+          <span><strong>Загружено</strong> {{ resume.created_at|date:"d.m.Y H:i" }}</span>
+          <span class="status-badge">{{ resume.get_extraction_state_display }}</span>
+        </header>
+        {% if resume.extraction_state == 'complete' %}
+        <details class="resume-review">
+          <summary>Проверить извлечённый текст</summary>
+          <div class="resume-review-body">
+            <p class="resume-review-help">Просмотрите разделы документа перед созданием LLM-черновика.</p>
+            <div class="resume-preview">
+              {% for block in row.preview_blocks %}
+              <section class="resume-preview-block"{% if block.label %} aria-label="{{ block.label }}"{% endif %}>
+                {% if block.label %}<span class="resume-preview-label">{{ block.label }}</span>{% endif %}
+                <div class="resume-preview-text">{{ block.text }}</div>
+              </section>
+              {% empty %}<p class="resume-preview-empty">Извлечённый текст пуст.</p>{% endfor %}
+            </div>
+            <details class="resume-raw">
+              <summary>Исходный извлечённый текст</summary>
+              <pre>{{ resume.text }}</pre>
+            </details>
+          </div>
+        </details>
+        <form method="post" action="{% url 'profile-extract' resume.id %}" data-disable-on-submit>{% csrf_token %}<button class="button button-secondary" type="submit">Создать LLM-черновик</button></form>
+        {% else %}
+        <details><summary>Вставить текст CV</summary><form method="post" action="{% url 'profile-resume-text' resume.id %}" class="form-stack" data-disable-on-submit>{% csrf_token %}<div><label for="resume-text-{{ resume.id }}">Текст резюме</label><textarea class="form-control" id="resume-text-{{ resume.id }}" name="text" rows="8" maxlength="200000" required></textarea><small>Разделяйте смысловые блоки пустой строкой.</small></div><button class="button button-primary" type="submit">Сохранить текст</button></form></details>
+        {% endif %}
+      </article>
+      {% endwith %}
+      {% endfor %}
+    </div>
     {% endif %}
   </section>
 
