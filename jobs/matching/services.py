@@ -137,10 +137,10 @@ def _configured_prices():
     return parsed
 
 
-def _default_gateway():
+def _default_gateway(*, model=None):
     return OpenAIGateway(
         api_key=_configured_value("OPENAI_API_KEY", "OPENAI_API_KEY"),
-        model=_configured_value("OPENAI_MODEL", "OPENAI_MODEL"),
+        model=model or _configured_value("OPENAI_MODEL", "OPENAI_MODEL") or "gpt-5.6-luna",
         prices=_configured_prices(),
     )
 
@@ -420,7 +420,9 @@ def evaluate(vacancy, criteria, *, gateway=None, profile_version=None, daily_lim
 
     if gateway is None:
         try:
-            gateway = _default_gateway()
+            gateway = _default_gateway(
+                model=(profile.preferences or {}).get("openai_model", "gpt-5.6-luna") if profile else None,
+            )
         except GatewayUnavailable as exc:
             return Assessment("pending", ("Конфигурация оценки недоступна; вакансия остаётся ожидающей.",), (), error_code=exc.code, cache_key=key)
 

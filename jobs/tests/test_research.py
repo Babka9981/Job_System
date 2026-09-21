@@ -2,6 +2,7 @@ import socket
 import subprocess
 import sys
 import time
+import traceback
 import base64
 import json
 from datetime import timedelta
@@ -15,16 +16,96 @@ from jobs.intelligence.fetch import FetchError, PublicFetcher
 from jobs.intelligence.http_process import HTTPProcessError, run_http_exchange
 from jobs.intelligence.research import research
 from jobs.intelligence.search import (
+    BraveSearchProvider,
     FixtureSearchProvider,
     SearchHit,
+    SearchProviderError,
     SearchProviderUnavailable,
     TavilySearchProvider,
 )
+from jobs.intelligence.search.brave import _http_transport as brave_http_transport
 from jobs.intelligence.search.tavily import _http_transport as tavily_http_transport
 from jobs.models.models import Profile, ProfileFact, Research, UsageLedger, UsageReservation, Vacancy
 
 
 class SearchProviderTests(TestCase):
+    def test_provider_transport_failures_and_malformed_json_drop_sensitive_exception_chains(self):
+        sentinel = "secret-key-and-response-body-sentinel"
+        providers = (
+            ("brave", brave_http_transport, {
+                "url": BraveSearchProvider.endpoint, "api_key": sentinel, "params": {"q": "Acme"},
+                "timeout": 1, "deadline": 100, "clock": lambda: 0,
+            }),
+            ("tavily", tavily_http_transport, {
+                "url": TavilySearchProvider.endpoint, "api_key": sentinel, "payload": {"query": "Acme"},
+                "timeout": 1, "deadline": 100, "clock": lambda: 0,
+            }),
+        )
+        for name, transport, kwargs in providers:
+            for failure in ("transport", "json"):
+                with self.subTest(provider=name, failure=failure):
+                    if failure == "transport":
+                        try:
+                            raise RuntimeError(sentinel)
+                        except RuntimeError as private_error:
+                            upstream = HTTPProcessError("network_error")
+                            upstream.__cause__ = private_error
+                        effect = mock.patch(
+                            f"jobs.intelligence.search.{name}.run_http_exchange", side_effect=upstream,
+                        )
+                    else:
+                        effect = mock.patch(
+                            f"jobs.intelligence.search.{name}.run_http_exchange",
+                            return_value={"status": 200, "headers": {}, "body": sentinel.encode()},
+                        )
+                    with effect, self.assertRaises(SearchProviderError) as caught:
+                        transport(**kwargs)
+                    self.assertIsNone(caught.exception.__cause__)
+                    self.assertIsNone(caught.exception.__context__)
+                    self.assertNotIn(sentinel, "".join(traceback.format_exception(caught.exception)))
+
+    def test_brave_llm_context_uses_get_contract_and_returns_candidate_urls_only(self):
+        captured = {}
+
+        def transport(*, url, api_key, params, timeout, deadline, clock):
+            captured.update(url=url, api_key=api_key, params=params)
+            return {"grounding": {"generic": [{
+                "url": "https://acme.example/about", "title": "About",
+                "snippets": ["candidate context, not evidence"],
+            }]}}
+
+        result = BraveSearchProvider(api_key="local-test", transport=transport).search(
+            "Acme product manager", deadline=100, clock=lambda: 0,
+        )
+        self.assertEqual(captured["url"], "https://api.search.brave.com/res/v1/llm/context")
+        self.assertEqual(captured["api_key"], "local-test")
+        self.assertEqual(captured["params"]["maximum_number_of_urls"], 5)
+        self.assertEqual(result[0].snippet, "candidate context, not evidence")
+
+    def test_brave_rejects_invalid_response_and_classifies_quota_without_leaking_key(self):
+        provider = BraveSearchProvider(
+            api_key="brave-secret-sentinel",
+            transport=lambda **kwargs: {"grounding": {"generic": "not-a-list"}},
+        )
+        with self.assertRaises(SearchProviderError) as invalid:
+            provider.search("Acme", deadline=100, clock=lambda: 0)
+        self.assertEqual(invalid.exception.code, "invalid_response")
+        with mock.patch(
+            "jobs.intelligence.search.brave.run_http_exchange",
+            return_value={"status": 429, "headers": {}, "body": b"{}"},
+        ) as exchange:
+            with self.assertRaises(SearchProviderUnavailable) as quota:
+                brave_http_transport(
+                    url=provider.endpoint, api_key="brave-secret-sentinel", params={"q": "Acme"},
+                    timeout=1, deadline=100, clock=lambda: 0,
+                )
+        self.assertEqual(quota.exception.code, "quota_exceeded")
+        self.assertNotIn("brave-secret-sentinel", str(quota.exception))
+        request = exchange.call_args.args[0]
+        self.assertEqual(request["method"], "GET")
+        self.assertEqual(request["headers"]["X-Subscription-Token"], "brave-secret-sentinel")
+        self.assertIn("?q=Acme", request["url"])
+
     def test_tavily_is_unavailable_without_local_key(self):
         with mock.patch.dict("os.environ", {}, clear=True):
             with self.assertRaises(SearchProviderUnavailable) as error:
@@ -58,6 +139,10 @@ class SearchProviderTests(TestCase):
             result = research(vacancy, domain="acme.example", provider=provider, fetcher=mock.Mock())
         self.assertEqual(result.status, Research.Status.UNAVAILABLE)
         self.assertIn("budget_unavailable", result.coverage["errors"])
+        self.assertEqual(result.coverage["provider_attempts"], [
+            {"query": 1, "provider": "tavily", "outcome": "budget_unavailable"},
+        ])
+        self.assertIn("Tavily: цена или бюджет не настроены", result.coverage["progress"])
         self.assertFalse(provider.transport.called)
         self.assertFalse(UsageLedger.objects.filter(owner=owner).exists())
 
@@ -470,6 +555,103 @@ class ResearchServiceTests(TestCase):
         self.assertEqual(result.status, Research.Status.NEEDS_DOMAIN)
         self.assertEqual(result.domain, "")
         self.assertFalse(self.fetcher.fetch.called)
+
+    def test_auto_falls_back_on_explicit_quota_and_keeps_actual_page_as_evidence(self):
+        self.profile.preferences = {
+            "daily_budget_usd": "1.00", "search_provider": "auto", "openai_model": "gpt-5.6-luna",
+        }
+        self.profile.save(update_fields=["preferences"])
+        calls = {"tavily": 0, "brave": 0}
+
+        def tavily_transport(**kwargs):
+            calls["tavily"] += 1
+            raise SearchProviderUnavailable("quota_exceeded", "quota")
+
+        def brave_transport(**kwargs):
+            calls["brave"] += 1
+            return {"grounding": {"generic": [{
+                "url": "https://acme.example/about", "title": "About",
+                "snippets": ["POISON SNIPPET MUST NOT BECOME EVIDENCE"],
+            }]}}
+
+        tavily = TavilySearchProvider(
+            api_key="tavily-test",
+            transport=tavily_transport,
+        )
+        brave = BraveSearchProvider(
+            api_key="brave-test",
+            transport=brave_transport,
+        )
+        fetcher = mock.Mock()
+        fetcher.fetch.return_value = {
+            "url": "https://acme.example/about",
+            "content": "Acme builds payment infrastructure for global merchants.",
+            "checked_at": timezone.now(),
+        }
+        with mock.patch("jobs.intelligence.research.service.TavilySearchProvider", return_value=tavily), mock.patch(
+            "jobs.intelligence.research.service.BraveSearchProvider", return_value=brave,
+        ), mock.patch.dict("os.environ", {
+            "TAVILY_COST_PER_CREDIT_USD": "0.01", "BRAVE_LLM_CONTEXT_COST_USD": "0.02",
+        }, clear=False):
+            result = research(
+                self.vacancy, domain="acme.example", profile=self.profile,
+                fetcher=fetcher, gateway=self.ValidGateway(),
+            )
+        self.assertEqual(result.coverage["provider"], "auto")
+        self.assertEqual(result.coverage["providers"], ["brave"])
+        self.assertEqual(result.coverage["provider_attempts"][:2], [
+            {"query": 1, "provider": "tavily", "outcome": "quota_exceeded"},
+            {"query": 1, "provider": "brave", "outcome": "success"},
+        ])
+        self.assertIn("Tavily: квота исчерпана → Brave: успешно", result.coverage["progress"])
+        self.assertTrue(result.facts)
+        self.assertNotIn("POISON", result.facts[0]["passage"])
+        self.assertEqual(calls, {"tavily": 3, "brave": 2})
+        self.assertEqual(result.coverage["queries"], 5)
+        self.assertEqual(len(result.coverage["provider_attempts"]), 5)
+        self.assertEqual(UsageReservation.objects.filter(status="released").count(), 3)
+        self.assertTrue(UsageLedger.objects.filter(metadata__provider="brave").exists())
+
+    def test_needs_domain_keeps_fallback_attempts_errors_and_progress(self):
+        self.profile.preferences = {"daily_budget_usd": "1.00", "search_provider": "auto"}
+        self.profile.save(update_fields=["preferences"])
+        tavily = TavilySearchProvider(
+            api_key="tavily-test",
+            transport=lambda **kwargs: (_ for _ in ()).throw(
+                SearchProviderUnavailable("quota_exceeded", "quota")
+            ),
+        )
+        brave = BraveSearchProvider(
+            api_key="brave-test",
+            transport=lambda **kwargs: {"grounding": {"generic": [
+                {"url": "https://acme-one.example", "title": "One", "snippets": []},
+                {"url": "https://acme-two.example", "title": "Two", "snippets": []},
+            ]}},
+        )
+        with mock.patch("jobs.intelligence.research.service.TavilySearchProvider", return_value=tavily), mock.patch(
+            "jobs.intelligence.research.service.BraveSearchProvider", return_value=brave,
+        ), mock.patch.dict("os.environ", {
+            "TAVILY_COST_PER_CREDIT_USD": "0.01", "BRAVE_LLM_CONTEXT_COST_USD": "0.02",
+        }, clear=False):
+            result = research(self.vacancy, domain="", profile=self.profile)
+        self.assertEqual(result.status, Research.Status.NEEDS_DOMAIN)
+        self.assertEqual(result.coverage["queries"], 5)
+        self.assertIn("quota_exceeded", result.coverage["errors"])
+        self.assertEqual(len(result.coverage["provider_attempts"]), 5)
+        self.assertIn("Tavily: квота исчерпана → Brave: успешно", result.coverage["progress"])
+
+    def test_auto_does_not_fallback_after_invalid_provider_response(self):
+        self.profile.preferences = {"daily_budget_usd": "1.00", "search_provider": "auto"}
+        self.profile.save(update_fields=["preferences"])
+        tavily = TavilySearchProvider(api_key="tavily-test", transport=lambda **kwargs: {"broken": []})
+        brave_transport = mock.Mock(return_value={"grounding": {"generic": []}})
+        brave = BraveSearchProvider(api_key="brave-test", transport=brave_transport)
+        with mock.patch("jobs.intelligence.research.service.TavilySearchProvider", return_value=tavily), mock.patch(
+            "jobs.intelligence.research.service.BraveSearchProvider", return_value=brave,
+        ), mock.patch.dict("os.environ", {"TAVILY_COST_PER_CREDIT_USD": "0.01"}, clear=False):
+            result = research(self.vacancy, domain="acme.example", profile=self.profile)
+        self.assertIn("invalid_response", result.coverage["errors"])
+        self.assertFalse(brave_transport.called)
 
     def test_queries_are_bounded_and_never_include_profile_or_contact(self):
         self.vacancy.contact = "private.person@example.com"

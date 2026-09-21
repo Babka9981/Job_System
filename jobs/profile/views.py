@@ -41,6 +41,7 @@ DEFAULT_CRITERIA = {
 DEFAULT_PREFERENCES = {
     "response_language": "ru", "tone": "professional", "length": "short", "emphasis": "",
     "schedule": ["09:00", "13:00", "17:00", "21:00"], "daily_budget_usd": "0.0000",
+    "openai_model": "gpt-5.6-luna", "search_provider": "auto",
 }
 
 
@@ -64,6 +65,7 @@ def _settings_initial(profile):
         "response_language": preferences["response_language"], "tone": preferences["tone"],
         "length": preferences["length"], "emphasis": preferences["emphasis"],
         "schedule": ", ".join(preferences["schedule"]), "daily_budget_usd": preferences["daily_budget_usd"],
+        "openai_model": preferences["openai_model"], "search_provider": preferences["search_provider"],
     }
 
 
@@ -131,6 +133,7 @@ def save_settings(request):
         "emphasis": data["emphasis"].strip(), "schedule": data["schedule"],
         "schedule_enabled": bool(data["timezone"].strip() and data["schedule"]),
         "daily_budget_usd": str(data["daily_budget_usd"]),
+        "openai_model": data["openai_model"], "search_provider": data["search_provider"],
     }
     try:
         update_profile_settings(profile, criteria=criteria, preferences=preferences, expected_version=data["version"])
@@ -200,12 +203,12 @@ def manual_resume_text(request, resume_id):
     return redirect("profile")
 
 
-def _gateway():
+def _gateway(*, model):
     try:
         prices = json.loads(os.environ.get("OPENAI_PRICES_JSON", "{}"))
     except ValueError:
         prices = {}
-    return OpenAIGateway(prices=prices)
+    return OpenAIGateway(model=model, prices=prices)
 
 
 @owner_required
@@ -215,7 +218,11 @@ def extract(request, resume_id):
     profile = _profile(request.user)
     resume = get_object_or_404(Resume, pk=resume_id, profile=profile)
     try:
-        extract_profile(resume, gateway=_gateway(), daily_limit=profile.preferences.get("daily_budget_usd"))
+        extract_profile(
+            resume,
+            gateway=_gateway(model=profile.preferences.get("openai_model", "gpt-5.6-luna")),
+            daily_limit=profile.preferences.get("daily_budget_usd"),
+        )
     except GatewayUnavailable as exc:
         if exc.code == "budget_pending":
             messages.warning(request, str(exc))

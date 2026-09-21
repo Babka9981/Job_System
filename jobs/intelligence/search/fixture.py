@@ -7,6 +7,7 @@ class FixtureSearchProvider:
     """Explicit test transport; it is never selected as the production default."""
 
     is_mock = True
+    provider_name = "fixture"
 
     def __init__(self, responses):
         self._responses = deque(responses)

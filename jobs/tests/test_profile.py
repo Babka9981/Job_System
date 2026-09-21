@@ -391,6 +391,7 @@ class ProfileHttpTests(TestCase):
             "hiring_countries": "DE, NL", "timezone": "", "languages": "RU, EN",
             "response_language": "ru", "tone": "professional", "length": "short", "emphasis": "B2B",
             "schedule": "09:00, 13:00", "daily_budget_usd": "1.2500",
+            "openai_model": "gpt-custom-model", "search_provider": "brave",
         }
 
         response = self.client.post(reverse("profile-settings"), payload)
@@ -399,6 +400,8 @@ class ProfileHttpTests(TestCase):
         self.assertEqual(profile.version, 2)
         self.assertFalse(profile.preferences["schedule_enabled"])
         self.assertEqual(profile.criteria["salary"]["basis"], "unknown")
+        self.assertEqual(profile.preferences["openai_model"], "gpt-custom-model")
+        self.assertEqual(profile.preferences["search_provider"], "brave")
 
         payload["emphasis"] = "Сохранить этот ввод"
         response = self.client.post(reverse("profile-settings"), payload)
@@ -434,10 +437,31 @@ class ProfileHttpTests(TestCase):
             "timezone": "Mars/Olympus", "languages": "", "response_language": "ru",
             "tone": "professional", "length": "short", "emphasis": "", "schedule": "09:00",
             "daily_budget_usd": "1.0000",
+            "openai_model": "gpt-5.6-luna", "search_provider": "auto",
         })
 
         self.assertEqual(response.status_code, 400)
         self.assertContains(response, "Неизвестный часовой пояс", status_code=400)
+        profile.refresh_from_db()
+        self.assertEqual(profile.version, 1)
+
+    def test_ai_settings_defaults_are_visible_and_invalid_values_are_not_saved(self):
+        response = self.client.get(reverse("profile"))
+        self.assertContains(response, "Суточный бюджет, USD")
+        self.assertContains(response, "gpt-5.6-luna")
+        self.assertContains(response, "Автоматически")
+        profile = Profile.objects.get(owner=self.owner)
+        payload = {
+            "version": profile.version, "roles": "Product Manager", "industries": "fintech",
+            "salary_target": "5000", "salary_currency": "USD", "salary_period": "month", "salary_basis": "unknown",
+            "work_modes": ["remote"], "residence_country": "", "hiring_countries": "",
+            "timezone": "", "languages": "", "response_language": "ru", "tone": "professional",
+            "length": "short", "emphasis": "", "schedule": "09:00", "daily_budget_usd": "1.0000",
+            "openai_model": "bad model with spaces", "search_provider": "unknown",
+        }
+        response = self.client.post(reverse("profile-settings"), payload)
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(response, "корректное имя модели", status_code=400)
         profile.refresh_from_db()
         self.assertEqual(profile.version, 1)
 
@@ -471,13 +495,14 @@ class ProfileHttpTests(TestCase):
             profile=profile, private_path="private/cv.docx", text="[Блок 1] Product manager", extraction_state="complete",
         )
 
-        with patch("jobs.profile.views._gateway", return_value=PendingGateway()):
+        with patch("jobs.profile.views._gateway", return_value=PendingGateway()) as gateway_factory:
             response = self.client.post(reverse("profile-extract", args=[resume.pk]), follow=True)
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Суточный лимит исчерпан")
         self.assertContains(response, "tone-warning")
         self.assertFalse(profile.facts.exists())
+        gateway_factory.assert_called_once_with(model="gpt-5.6-luna")
 
     def test_unresolved_and_rejected_questions_remain_visible_after_confirm(self):
         profile = Profile.objects.create(owner=self.owner)

@@ -15,12 +15,13 @@ from jobs.intelligence.budget import (
     BudgetPending,
     BudgetUnavailable,
     mark_usage_pending,
+    release_usage,
     reserve_usage,
     settle_usage,
 )
 from jobs.intelligence.fetch import FetchError, PublicFetcher
 from jobs.intelligence.gateway import GatewayError, GatewayUnavailable, OpenAIGateway
-from jobs.intelligence.search import SearchProviderError, TavilySearchProvider
+from jobs.intelligence.search import BraveSearchProvider, SearchProviderError, SearchProviderUnavailable, TavilySearchProvider
 from jobs.models.models import ProfileFact, Research
 
 
@@ -116,24 +117,35 @@ def _queries(company, domain, role):
     ][:MAX_QUERIES]
 
 
-def _search_price():
-    raw = os.environ.get("TAVILY_COST_PER_CREDIT_USD", "")
+def _search_price(provider):
+    provider_name = getattr(provider, "provider_name", "search")
+    raw = os.environ.get(getattr(provider, "price_env", ""), "")
     try:
         value = Decimal(raw)
     except (InvalidOperation, TypeError, ValueError):
-        raise BudgetUnavailable("Цена Tavily не настроена; платный поиск отключён.") from None
+        raise BudgetUnavailable(f"Цена {provider_name} не настроена; платный поиск отключён.") from None
     if not value.is_finite() or value <= 0:
-        raise BudgetUnavailable("Цена Tavily не настроена; платный поиск отключён.")
+        raise BudgetUnavailable(f"Цена {provider_name} не настроена; платный поиск отключён.")
     return value
 
 
-def _default_gateway():
+def _default_gateway(*, model):
     raw_prices = os.environ.get("OPENAI_PRICES_JSON", "")
     try:
         prices = json.loads(raw_prices) if raw_prices else {}
     except (TypeError, ValueError):
         prices = {}
-    return OpenAIGateway(prices=prices if isinstance(prices, dict) else {})
+    return OpenAIGateway(model=model, prices=prices if isinstance(prices, dict) else {})
+
+
+def _search_providers(profile, provider):
+    if provider is not None:
+        return getattr(provider, "provider_name", "custom"), [provider]
+    selected = (profile.preferences or {}).get("search_provider", "auto") if profile else "auto"
+    providers = {"tavily": TavilySearchProvider(), "brave": BraveSearchProvider()}
+    if selected not in {"auto", *providers}:
+        selected = "auto"
+    return selected, list(providers.values()) if selected == "auto" else [providers[selected]]
 
 
 def _synthesize(vacancy, profile, pages, gateway, *, company, domain, role, deadline, clock):
@@ -266,7 +278,30 @@ def _cached(vacancy, company, domain, role):
     return None
 
 
-def _save_needs_domain(vacancy, company, role, domains):
+def _provider_progress(provider_attempts):
+    outcome_labels = {
+        "success": "успешно",
+        "missing_api_key": "ключ не настроен",
+        "quota_exceeded": "квота исчерпана",
+        "provider_unavailable": "недоступен",
+        "budget_pending": "бюджет исчерпан",
+        "budget_unavailable": "цена или бюджет не настроены",
+        "invalid_response": "некорректный ответ",
+        "provider_error": "ошибка",
+        "time_budget": "лимит времени",
+        "query_limit": "лимит запросов",
+    }
+    attempts = " → ".join(
+        f"{attempt['provider'].title()}: {outcome_labels.get(attempt['outcome'], attempt['outcome'])}"
+        for attempt in provider_attempts
+    )
+    return f" Поиск: {attempts}." if attempts else ""
+
+
+def _save_needs_domain(
+    vacancy, company, role, domains, *, provider_selection, successful_providers,
+    provider_attempts, search_errors, provider_http_attempts, logical_queries, max_queries,
+):
     return Research.objects.create(
         vacancy=vacancy,
         company=company,
@@ -275,8 +310,15 @@ def _save_needs_domain(vacancy, company, role, domains):
         facts=[],
         sources=[],
         coverage={
-            "progress": "Требуется подтверждённый домен компании.",
+            "progress": f"Требуется подтверждённый домен компании.{_provider_progress(provider_attempts)}",
             "candidate_domains": sorted(domains),
+            "provider": provider_selection,
+            "providers": successful_providers,
+            "provider_attempts": provider_attempts,
+            "errors": search_errors,
+            "queries": provider_http_attempts,
+            "logical_queries": logical_queries,
+            "limits": {"queries": max_queries},
             "conflicts": [],
             "hypotheses": [],
         },
@@ -478,64 +520,99 @@ def research(
                 cached.save(update_fields=["coverage", "updated_at"])
             return cached
 
-    provider = provider or TavilySearchProvider()
+    provider_selection, providers = _search_providers(profile, provider)
     fetcher = fetcher or PublicFetcher(clock=clock)
     if isinstance(fetcher, PublicFetcher):
         fetcher.clock = clock
     hits = []
     query_count = 0
     search_errors = []
+    provider_attempts = []
+    successful_providers = []
+    provider_http_attempts = 0
     try:
         for query in _queries(company, domain, role)[:max_queries]:
             if clock() - started >= time_budget:
                 search_errors.append("time_budget")
                 break
             query_count += 1
-            reservation = None
-            try:
-                if not _deadline_aware(provider.search):
-                    search_errors.append("unsafe_transport")
+            query_complete = False
+            for selected_provider in providers:
+                reservation = None
+                provider_name = getattr(selected_provider, "provider_name", "custom")
+                try:
+                    if not _deadline_aware(selected_provider.search):
+                        raise SearchProviderUnavailable("unsafe_transport", "Search transport не поддерживает deadline.")
+                    if getattr(selected_provider, "deadline_ready", True) is not True:
+                        raise SearchProviderUnavailable("unsafe_transport", "Search transport не поддерживает deadline.")
+                    if not getattr(selected_provider, "is_mock", False) and getattr(selected_provider, "api_key", None) == "":
+                        search_errors.append("missing_api_key")
+                        provider_attempts.append({"query": query_count, "provider": provider_name, "outcome": "missing_api_key"})
+                        if provider_selection == "auto":
+                            continue
+                        break
+                    if provider_http_attempts >= max_queries:
+                        search_errors.append("query_limit")
+                        break
+                    if not getattr(selected_provider, "is_mock", False) and getattr(selected_provider, "api_key", None) != "":
+                        price = _search_price(selected_provider)
+                        reservation = reserve_usage(
+                            vacancy.owner,
+                            kind="web_search",
+                            max_cost=price,
+                            daily_limit=(profile.preferences or {}).get("daily_budget_usd") if profile else None,
+                        )
+                    provider_timeout = getattr(selected_provider, "timeout", None)
+                    if isinstance(provider_timeout, (int, float)) and not isinstance(provider_timeout, bool):
+                        selected_provider.timeout = min(provider_timeout, max(time_budget - (clock() - started), 0.1))
+                    provider_http_attempts += 1
+                    hits.extend(selected_provider.search(query, max_results=5, deadline=deadline, clock=clock))
+                    if clock() > deadline:
+                        if reservation:
+                            mark_usage_pending(reservation)
+                        search_errors.append("time_budget")
+                        provider_attempts.append({"query": query_count, "provider": provider_name, "outcome": "time_budget"})
+                        break
+                    if reservation:
+                        settle_usage(
+                            reservation,
+                            actual_cost=price,
+                            units=1,
+                            metadata={"provider": provider_name, "operation": "search"},
+                        )
+                    provider_attempts.append({"query": query_count, "provider": provider_name, "outcome": "success"})
+                    if provider_name not in successful_providers:
+                        successful_providers.append(provider_name)
+                    query_complete = True
                     break
-                if getattr(provider, "deadline_ready", True) is not True:
-                    search_errors.append("unsafe_transport")
+                except (BudgetUnavailable, BudgetPending) as exc:
+                    search_errors.append(exc.code)
+                    provider_attempts.append({"query": query_count, "provider": provider_name, "outcome": exc.code})
                     break
-                if not getattr(provider, "is_mock", False) and getattr(provider, "api_key", None) != "":
-                    reservation = reserve_usage(
-                        vacancy.owner,
-                        kind="web_search",
-                        max_cost=_search_price(),
-                        daily_limit=(profile.preferences or {}).get("daily_budget_usd") if profile else None,
-                    )
-                provider_timeout = getattr(provider, "timeout", None)
-                if isinstance(provider_timeout, (int, float)) and not isinstance(provider_timeout, bool):
-                    provider.timeout = min(provider_timeout, max(time_budget - (clock() - started), 0.1))
-                hits.extend(provider.search(
-                    query, max_results=5, deadline=deadline, clock=clock,
-                ))
-                if clock() > deadline:
+                except SearchProviderUnavailable as exc:
+                    if reservation:
+                        if exc.code == "quota_exceeded":
+                            release_usage(reservation)
+                        else:
+                            mark_usage_pending(reservation)
+                    search_errors.append(exc.code)
+                    provider_attempts.append({"query": query_count, "provider": provider_name, "outcome": exc.code})
+                    if provider_selection == "auto" and exc.code in {"missing_api_key", "quota_exceeded", "provider_unavailable"}:
+                        continue
+                    break
+                except SearchProviderError as exc:
                     if reservation:
                         mark_usage_pending(reservation)
-                    search_errors.append("time_budget")
+                    search_errors.append(exc.code)
+                    provider_attempts.append({"query": query_count, "provider": provider_name, "outcome": exc.code})
                     break
-                if reservation:
-                    settle_usage(
-                        reservation,
-                        actual_cost=_search_price(),
-                        units=1,
-                        metadata={"provider": "tavily", "operation": "basic_search"},
-                    )
-            except (BudgetUnavailable, BudgetPending) as exc:
-                search_errors.append(exc.code)
-                break
-            except SearchProviderError as exc:
-                if reservation:
-                    mark_usage_pending(reservation)
-                search_errors.append(exc.code)
-                break
-            except Exception:
-                if reservation:
-                    mark_usage_pending(reservation)
-                search_errors.append("provider_error")
+                except Exception:
+                    if reservation:
+                        mark_usage_pending(reservation)
+                    search_errors.append("provider_error")
+                    provider_attempts.append({"query": query_count, "provider": provider_name, "outcome": "provider_error"})
+                    break
+            if not query_complete:
                 break
     except Exception:
         search_errors.append("provider_error")
@@ -549,7 +626,16 @@ def research(
 
     if not domain_supplied:
         domains = {_host(hit.url) for hit in unique_hits if _host(hit.url)}
-        return _save_needs_domain(vacancy, company, role, domains)
+        return _save_needs_domain(
+            vacancy, company, role, domains,
+            provider_selection=provider_selection,
+            successful_providers=successful_providers,
+            provider_attempts=provider_attempts,
+            search_errors=search_errors,
+            provider_http_attempts=provider_http_attempts,
+            logical_queries=query_count,
+            max_queries=max_queries,
+        )
 
     # Role-aware ordering keeps official evidence first, then recent external coverage.
     def recency(hit):
@@ -630,7 +716,9 @@ def research(
     facts = []
     if pages and clock() < deadline:
         try:
-            selected_gateway = gateway or _default_gateway()
+            selected_gateway = gateway or _default_gateway(
+                model=(profile.preferences or {}).get("openai_model", "gpt-5.6-luna") if profile else "gpt-5.6-luna",
+            )
             if not _deadline_aware(selected_gateway.structured):
                 raise GatewayUnavailable("unsafe_transport", "Gateway не поддерживает отменяемый deadline.")
             synthesized, conflicts, hypotheses = _synthesize(
@@ -649,15 +737,17 @@ def research(
     elif pages:
         synthesis_error = "time_budget"
 
+    provider_progress = _provider_progress(provider_attempts)
+
     if facts:
         status = Research.Status.COMPLETE if len(facts) >= 3 and official_pages and external_pages else Research.Status.PARTIAL
-        progress = f"Проверено страниц: {len(sources)}; не удалось прочитать: {failed_pages}."
+        progress = f"Проверено страниц: {len(sources)}; не удалось прочитать: {failed_pages}.{provider_progress}"
     elif sources:
         status = Research.Status.PARTIAL
-        progress = f"Прочитано страниц: {len(sources)}; проверяемые факты не сформированы."
+        progress = f"Прочитано страниц: {len(sources)}; проверяемые факты не сформированы.{provider_progress}"
     else:
         status = Research.Status.UNAVAILABLE
-        progress = "Проверяемых страниц получить не удалось; факты не сформированы."
+        progress = f"Проверяемых страниц получить не удалось; факты не сформированы.{provider_progress}"
     return Research.objects.create(
         vacancy=vacancy,
         company=company,
@@ -668,9 +758,12 @@ def research(
         sources=sources,
         expires_at=timezone.now() + CACHE_TTL if sources else None,
         coverage={
-            "provider": "fixture" if getattr(provider, "is_mock", False) else "tavily",
+            "provider": provider_selection,
+            "providers": successful_providers,
+            "provider_attempts": provider_attempts,
             "live_verified": False,
-            "queries": query_count,
+            "queries": provider_http_attempts,
+            "logical_queries": query_count,
             "pages_selected": len(selected),
             "pages_read": len(sources),
             "failed_pages": failed_pages,

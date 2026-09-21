@@ -50,6 +50,17 @@ class ProfileSettingsForm(StyledForm):
     emphasis = forms.CharField(label="Акцент отклика", required=False)
     schedule = forms.CharField(label="Расписание", help_text="Время через запятую, например 09:00, 13:00")
     daily_budget_usd = forms.DecimalField(label="Суточный бюджет, USD", min_value=0, decimal_places=4)
+    openai_model = forms.RegexField(
+        label="Модель OpenAI",
+        regex=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$",
+        initial="gpt-5.6-luna",
+        error_messages={"invalid": "Укажите корректное имя модели OpenAI."},
+    )
+    search_provider = forms.ChoiceField(
+        label="Поисковый провайдер",
+        choices=[("auto", "Автоматически"), ("tavily", "Tavily"), ("brave", "Brave")],
+        initial="auto",
+    )
 
     def clean_schedule(self):
         values = [item.strip() for item in self.cleaned_data["schedule"].split(",") if item.strip()]

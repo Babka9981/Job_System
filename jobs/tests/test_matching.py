@@ -442,6 +442,8 @@ class MatchingTests(TestCase):
     @patch("jobs.matching.services.OpenAIGateway")
     def test_default_gateway_receives_configured_key_model_and_prices(self, gateway_class):
         gateway_class.return_value.structured.return_value = FixtureGateway().data
+        self.profile.preferences = {**self.profile.preferences, "openai_model": "configured-model"}
+        self.profile.save(update_fields=["preferences"])
 
         result = evaluate(self.vacancy(), self.profile.criteria)
 
