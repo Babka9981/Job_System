@@ -12,7 +12,7 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/IliaF/.codex/skills/autopilot",
   "startedAt": "2026-09-20T15:27:16+03:00",
-  "updatedAt": "2026-09-21T16:06:55+03:00",
+  "updatedAt": "2026-09-21T16:40:00+03:00",
   "finishedAt": null,
   "stages": [
     {"id":"preflight","status":"done","startedAt":"2026-09-20T15:27:16+03:00","finishedAt":"2026-09-20T15:46:44+03:00","note":"Репозиторий и исходные документы проверены"},
@@ -20,11 +20,11 @@ window.STATE =
     {"id":"briefing","status":"done","finishedAt":"2026-09-20T15:46:44+03:00","note":"OpenAI, настраиваемый поиск, CV extraction; search provider уточняется перед T08"},
     {"id":"spec","status":"done","finishedAt":"2026-09-20T15:46:44+03:00","note":"Независимая проверка пройдена"},
     {"id":"plan","status":"done","finishedAt":"2026-09-20T15:46:44+03:00","note":"12 тикетов; реализация ожидает команды"},
-    {"id":"build","status":"done","startedAt":"2026-09-20T16:05:00+03:00","finishedAt":"2026-09-21T15:47:36+03:00","note":"T01–T16 завершены"},
-    {"id":"review","status":"done","startedAt":"2026-09-20T16:40:00+03:00","finishedAt":"2026-09-21T15:47:36+03:00","note":"T16 принят: manifest/spec done, blocking craft findings нет"},
-    {"id":"final","status":"active","startedAt":"2026-09-21T05:29:05+03:00","note":"T16 опубликован в production; ожидается подтверждение профиля и включение monitoring"}
+    {"id":"build","status":"done","startedAt":"2026-09-20T16:05:00+03:00","finishedAt":"2026-09-21T16:40:00+03:00","note":"T01–T17 завершены"},
+    {"id":"review","status":"done","startedAt":"2026-09-20T16:40:00+03:00","finishedAt":"2026-09-21T16:40:00+03:00","note":"T17 manifest/spec DONE; blocking craft/security findings нет"},
+    {"id":"final","status":"active","startedAt":"2026-09-21T05:29:05+03:00","note":"T17 принят; production recovery модели и цены"}
   ],
-  "requirements":{"total":89,"done":89,"inTicket":0,"inSpec":0,"placeholder":0,"deferred":0,"dropped":0},
+  "requirements":{"total":90,"done":89,"inTicket":1,"inSpec":0,"placeholder":0,"deferred":0,"dropped":0},
   "tickets":[
   {
     "id": "01",
@@ -525,11 +525,28 @@ window.STATE =
     "repairs": 0,
     "handoffs": 0,
     "githubIssue": null
+  },
+  {
+    "id": "17",
+    "title": "Рабочая модель и цена для LLM-черновика",
+    "requirements": ["G17"],
+    "blockedBy": ["03","16"],
+    "wave": 11,
+    "zone": ["jobs/profile/","jobs/matching/","jobs/drafts/","jobs/intelligence/","deployment/setup-wizard.sh",".env.example","jobs/tests/"],
+    "status": "done",
+    "startedAt": "2026-09-21T16:18:00+03:00",
+    "finishedAt": "2026-09-21T16:40:00+03:00",
+    "commit": "eafa798",
+    "tests": "RED deployment contract; targeted Django 143 passed; full Django 367 passed (1 skipped); UI 10 passed; browser 50 scans, Axe/console clean; migration drift, pip, diff and bash syntax clean",
+    "retries": 0,
+    "repairs": 0,
+    "handoffs": 0,
+    "githubIssue": null
   }
 ],"singlePass":null,"tests":null,
   "debt":{"placeholders":[],"assumptions":[],"emptyEnv":["TELEGRAM_API_ID","TELEGRAM_API_HASH"]},
   "additions":[],"coverage":{"found":9,"fixed":9,"deferred":0,"note":"7 замечаний спецификации и 2 контракта/плана исправлены"},
   "reviewers":{"manifestSpec":"/root/spec_check","craft":"/root/craft_review"},
   "blind":{"status":"partial","checkedAt":"2026-09-21T15:57:34+03:00","productionUpdatedAt":"2026-09-21T16:06:55+03:00","agreed":["local single-owner app","profile/CV","50-source registry","matching","research/drafts","monitoring contracts","backup bundle","design audit","VPS deploy","HTTPS","controlled restart","production owner","production 9+41 source registry","OpenAI live authentication","Tavily live search","Brave application Context-to-Web fallback","Telegram Bot API identity and owner chat","three encrypted production backups","backup timer","unaffected Eggent/SkyPay/blog","Sources table layout: local overflow, sticky context, 10 aligned columns","Sources table production static rollout","Readable CV preview on desktop and mobile","Exact raw CV secondary view and unchanged stored text","CV preview keyboard access and zero page overflow","Readable CV preview production rollout"],"drift":["Telegram MTProto reader awaits API_ID/API_HASH","off-server decrypt/verify and restore drill pending","monitoring remains disabled until CV/profile confirmed_version is greater than zero"],"commands":"Django 365 OK (1 skipped); Node 10 OK; browser 50/50 scans; T16 blind seeded desktop 1440/mobile 390 PASS with exact raw match, keyboard access and zero overflow; production image 20260921T130111Z healthy; HTTPS health/login/static 200; preview CSS present; Eggent 307, SkyPay 200, blog 200; pre-update encrypted backup job-system-20260921T125955Z.tar.age; production aggregates profiles=1, resumes=1, confirmed_profiles=0; backup timer active"},
-  "concerns":["DROP T01 browser smoke concern: superseded by T12 real Chrome/Axe 50-scan audit","REPORT Login throttle is process-local; production currently runs one web container","DROP Python mismatch concern: production image now runs pinned Python 3.13.15","REPORT T14 research orchestration currently knows Brave search_context/search_web; consolidate behind an explicit attempt API in a later refactor","REPORT MTProto and off-server restore drill remain operational follow-ups","REPORT T15 test maintainability: Django assertions bind to CSS hooks; browser checks reset 200% before sticky/local-scroll assertions and do not fixture long wrapping; CSS total table width duplicates column-width sum","REPORT T16 preview edge cases: display parser normalizes exotic line separators/final blank lines, numeric marker badges are unbounded, parser boundary assertions and repeated landmark semantics can be tightened; exact raw remains unchanged"]
+  "concerns":["DROP T01 browser smoke concern: superseded by T12 real Chrome/Axe 50-scan audit","REPORT Login throttle is process-local; production currently runs one web container","DROP Python mismatch concern: production image now runs pinned Python 3.13.15","REPORT T14 research orchestration currently knows Brave search_context/search_web; consolidate behind an explicit attempt API in a later refactor","REPORT MTProto and off-server restore drill remain operational follow-ups","REPORT T15 test maintainability: Django assertions bind to CSS hooks; browser checks reset 200% before sticky/local-scroll assertions and do not fixture long wrapping; CSS total table width duplicates column-width sum","REPORT T16 preview edge cases: display parser normalizes exotic line separators/final blank lines, numeric marker badges are unbounded, parser boundary assertions and repeated landmark semantics can be tightened; exact raw remains unchanged","REPORT T17 wizard rerun with default replaces existing custom-model price entries; custom JSON is only checked non-empty and deployment regression is substring-based rather than behavioral"]
 }

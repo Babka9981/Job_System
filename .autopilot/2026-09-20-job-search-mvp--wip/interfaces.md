@@ -204,3 +204,8 @@ Content permission проверяется до LLM; CV/Search/Jobs недове�
 - `build_resume_preview(text: str) -> tuple[ResumePreviewBlock, ...]` строит только display-модель и не меняет `Resume.text`.
 - `ResumePreviewBlock(label: str, text: str)` хранит безопасную подпись маркера и точное содержимое строки для шаблона.
 - LLM и storage продолжают использовать исходный `Resume.text`; preview и raw-view существуют только на owner-scoped profile page.
+
+# Из таска 17 — OpenAI runtime default
+
+- `jobs.intelligence.config.DEFAULT_OPENAI_MODEL = "gpt-5-mini"` — единый default для profile, matching, drafts и research; сохранённая custom model имеет приоритет.
+- Setup price для default: input `0.25`, cached input `0.025`, output `2.00` USD за миллион токенов. Любая model без точной записи в `OPENAI_PRICES_JSON` fail-closed.
