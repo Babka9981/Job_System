@@ -5,14 +5,16 @@
 
 ## Развёрнуто и проверено
 
-- Commit `a4ded68` развёрнут на VPS `169.58.93.185` в `/srv/job-system`; входящий в него
-  product commit — `3b93181`.
-- Immutable image tag: `20260921T115126Z`; compose project: `job-system`.
+- Commit `0165fb0` находится в GitHub/main и развёрнут на VPS `169.58.93.185` в
+  `/srv/job-system`; входящий product commit T16 — `5283df2`.
+- Immutable image tag: `20260921T130111Z`; compose project: `job-system`.
 - Web привязан только к `127.0.0.1:18111` и опубликован через Caddy как
   `https://job.web3babka.su`.
 - Container healthy, HTTPS health endpoint отвечает успешно; login и static endpoints
   возвращают HTTP 200.
-- Новый sources-table CSS присутствует в collected static и доступен по HTTP 200.
+- Читаемый preview извлечённого CV отображается обычными блоками; secondary raw view
+  сохраняет точное представление, а `Resume.text` и LLM input не меняются.
+- Preview CSS присутствует в collected static и доступен по HTTP 200.
 - Owner создан: `active_owners=1`, usable password — `true`; значение пароля не записано.
 - Публичная регистрация закрыта: signup/register возвращает HTTP 404.
 - Source registry инициализирован: 50 источников (`9 site + 41 telegram`).
@@ -30,13 +32,23 @@
 - Brave LLM Context возвращает `OPTION_NOT_IN_PLAN`; application fallback на Brave Web
   Search проверен live и вернул один результат.
 - Созданы encrypted backups `job-system-20260921T090715Z.tar.age`, pre-update
-  `job-system-20260921T103955Z.tar.age` и pre-T15
-  `job-system-20260921T115026Z.tar.age`; правила доступа к файлам проверены.
+  `job-system-20260921T103955Z.tar.age`, pre-T15
+  `job-system-20260921T115026Z.tar.age` и pre-T16
+  `job-system-20260921T125955Z.tar.age`; правила доступа к файлам проверены.
+
+## Проверки T16
+
+- Локально: Django 365 passed, 1 skipped; Node UI 10 passed; browser matrix 50 scans.
+- Blind desktop 1440 и mobile 390: PASS; exact raw match, keyboard Enter и отсутствие
+  горизонтального overflow подтверждены.
+- Production: container healthy; HTTPS health, `accounts/login` и static отвечают HTTP 200.
+- После rollout preview CSS найден в collected static и доступен по HTTP 200.
+- Существующие сервисы не затронуты: Eggent отвечает HTTP 307, SkyPay и blog — HTTP 200.
 
 ## Ожидает ручного действия
 
-- Профиль и настройки поиска существуют, но `confirmed_version=0`. Owner должен загрузить
-  и подтвердить CV/профиль; только после этого включаются monitoring flag и timer.
+- Production-проверка вернула `profiles=1`, `resumes=1`, `confirmed_profiles=0`: CV
+  загружен, но подтверждённых профилей нет; monitoring остаётся выключенным до подтверждения.
 - `TELEGRAM_API_ID` и `TELEGRAM_API_HASH` пока пусты, поэтому MTProto reader отложен.
 - Encrypted backup нужно скачать на доверенную машину, расшифровать private AGE identity,
   которая не хранится на VPS, и выполнить off-server verification.
