@@ -1,8 +1,10 @@
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
+import json
 import subprocess
 import time
 import traceback
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.test import TransactionTestCase
@@ -272,3 +274,42 @@ class AtomicBudgetTests(TransactionTestCase):
         self.assertEqual(caught.exception.code, "deadline_exceeded")
         self.assertTrue(process.killed)
         self.assertTrue(process.reaped)
+
+    def test_openai_transport_default_and_explicit_deadlines_bound_http_exchange(self):
+        response_body = {
+            "output": [{"type": "message", "content": [{"type": "output_text", "text": "{}"}]}],
+            "usage": {"input_tokens": 1, "output_tokens": 1},
+        }
+        upstream = {
+            "body": json.dumps(response_body).encode("utf-8"),
+            "headers": {},
+        }
+        transport = OpenAIResponsesTransport()
+
+        with mock.patch("jobs.intelligence.gateway.run_http_exchange", return_value=upstream) as exchange:
+            transport.create_response(api_key="sk-test", payload={}, clock=lambda: 100.0)
+
+        request = exchange.call_args.args[0]
+        self.assertAlmostEqual(exchange.call_args.kwargs["deadline"], 220.0)
+        self.assertAlmostEqual(request["socket_timeout"], 120.0)
+
+        with mock.patch("jobs.intelligence.gateway.run_http_exchange", return_value=upstream) as exchange:
+            transport.create_response(
+                api_key="sk-test", payload={}, deadline=130.0, clock=lambda: 100.0,
+            )
+
+        request = exchange.call_args.args[0]
+        self.assertAlmostEqual(exchange.call_args.kwargs["deadline"], 130.0)
+        self.assertAlmostEqual(request["socket_timeout"], 30.0)
+
+    def test_openai_transport_rejects_expired_deadline_before_http_exchange(self):
+        transport = OpenAIResponsesTransport()
+
+        with mock.patch("jobs.intelligence.gateway.run_http_exchange") as exchange:
+            with self.assertRaises(GatewayError) as caught:
+                transport.create_response(
+                    api_key="sk-test", payload={}, deadline=100.0, clock=lambda: 100.0,
+                )
+
+        self.assertEqual(caught.exception.code, "deadline_exceeded")
+        exchange.assert_not_called()
