@@ -33,6 +33,15 @@ free allowance проверяются перед активацией; ника�
 https://docs.tavily.com/documentation/api-reference/endpoint/extract ;
 https://docs.tavily.com/documentation/api-credits
 
+Brave сначала вызывает официальный LLM Context:
+GET https://api.search.brave.com/res/v1/llm/context. Только структурированный
+`error.code=OPTION_NOT_IN_PLAN` включает один fallback-запрос к официальному
+GET https://api.search.brave.com/res/v1/web/search. Оба запроса делят один deadline;
+на один provider search физический cap равен двум запросам. Любые другие 4xx, auth,
+quota, timeout и network ошибки остаются fail-closed без fallback. `web.results`
+преобразуется в candidate `SearchHit`; `description` остаётся snippet и становится
+research evidence только после отдельного защищённого fetch исходной страницы.
+
 ## Стек
 
 Django5.2 LTS совместим с Python3.13; patch pin перепроверяется при T01.

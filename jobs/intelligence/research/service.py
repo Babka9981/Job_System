@@ -539,9 +539,13 @@ def research(
             query_complete = False
             for selected_provider in providers:
                 reservation = None
+                price = None
+                attempt_stage = "context"
                 provider_name = getattr(selected_provider, "provider_name", "custom")
                 try:
-                    if not _deadline_aware(selected_provider.search):
+                    primary_search = getattr(selected_provider, "search_context", selected_provider.search)
+                    web_search = getattr(selected_provider, "search_web", None)
+                    if not _deadline_aware(primary_search):
                         raise SearchProviderUnavailable("unsafe_transport", "Search transport не поддерживает deadline.")
                     if getattr(selected_provider, "deadline_ready", True) is not True:
                         raise SearchProviderUnavailable("unsafe_transport", "Search transport не поддерживает deadline.")
@@ -566,12 +570,53 @@ def research(
                     if isinstance(provider_timeout, (int, float)) and not isinstance(provider_timeout, bool):
                         selected_provider.timeout = min(provider_timeout, max(time_budget - (clock() - started), 0.1))
                     provider_http_attempts += 1
-                    hits.extend(selected_provider.search(query, max_results=5, deadline=deadline, clock=clock))
-                    if clock() > deadline:
+                    try:
+                        found_hits = primary_search(query, max_results=5, deadline=deadline, clock=clock)
+                    except SearchProviderError as exc:
+                        if exc.code != "option_not_in_plan" or not callable(web_search):
+                            raise
+                        if reservation:
+                            settle_usage(
+                                reservation,
+                                actual_cost=price,
+                                units=1,
+                                metadata={"provider": provider_name, "operation": "search"},
+                            )
+                            reservation = None
+                        search_errors.append(exc.code)
+                        provider_attempts.append({
+                            "query": query_count, "provider": provider_name, "outcome": exc.code,
+                        })
+                        if provider_http_attempts >= max_queries:
+                            search_errors.append("query_limit")
+                            provider_attempts.append({
+                                "query": query_count, "provider": provider_name, "outcome": "web_query_limit",
+                            })
+                            break
+                        if clock() >= deadline:
+                            search_errors.append("time_budget")
+                            provider_attempts.append({
+                                "query": query_count, "provider": provider_name, "outcome": "web_time_budget",
+                            })
+                            break
+                        attempt_stage = "web"
+                        if not getattr(selected_provider, "is_mock", False) and getattr(selected_provider, "api_key", None) != "":
+                            reservation = reserve_usage(
+                                vacancy.owner,
+                                kind="web_search",
+                                max_cost=price,
+                                daily_limit=(profile.preferences or {}).get("daily_budget_usd") if profile else None,
+                            )
+                        provider_http_attempts += 1
+                        found_hits = web_search(query, max_results=5, deadline=deadline, clock=clock)
+                    hits.extend(found_hits)
+                    if clock() >= deadline:
                         if reservation:
                             mark_usage_pending(reservation)
+                            reservation = None
                         search_errors.append("time_budget")
-                        provider_attempts.append({"query": query_count, "provider": provider_name, "outcome": "time_budget"})
+                        outcome = "web_time_budget" if attempt_stage == "web" else "time_budget"
+                        provider_attempts.append({"query": query_count, "provider": provider_name, "outcome": outcome})
                         break
                     if reservation:
                         settle_usage(
@@ -580,14 +625,17 @@ def research(
                             units=1,
                             metadata={"provider": provider_name, "operation": "search"},
                         )
-                    provider_attempts.append({"query": query_count, "provider": provider_name, "outcome": "success"})
+                        reservation = None
+                    outcome = "web_success" if attempt_stage == "web" else "success"
+                    provider_attempts.append({"query": query_count, "provider": provider_name, "outcome": outcome})
                     if provider_name not in successful_providers:
                         successful_providers.append(provider_name)
                     query_complete = True
                     break
                 except (BudgetUnavailable, BudgetPending) as exc:
                     search_errors.append(exc.code)
-                    provider_attempts.append({"query": query_count, "provider": provider_name, "outcome": exc.code})
+                    outcome = f"web_{exc.code}" if attempt_stage == "web" else exc.code
+                    provider_attempts.append({"query": query_count, "provider": provider_name, "outcome": outcome})
                     break
                 except SearchProviderUnavailable as exc:
                     if reservation:
@@ -596,7 +644,8 @@ def research(
                         else:
                             mark_usage_pending(reservation)
                     search_errors.append(exc.code)
-                    provider_attempts.append({"query": query_count, "provider": provider_name, "outcome": exc.code})
+                    outcome = f"web_{exc.code}" if attempt_stage == "web" else exc.code
+                    provider_attempts.append({"query": query_count, "provider": provider_name, "outcome": outcome})
                     if provider_selection == "auto" and exc.code in {"missing_api_key", "quota_exceeded", "provider_unavailable"}:
                         continue
                     break
@@ -604,13 +653,15 @@ def research(
                     if reservation:
                         mark_usage_pending(reservation)
                     search_errors.append(exc.code)
-                    provider_attempts.append({"query": query_count, "provider": provider_name, "outcome": exc.code})
+                    outcome = f"web_{exc.code}" if attempt_stage == "web" else exc.code
+                    provider_attempts.append({"query": query_count, "provider": provider_name, "outcome": outcome})
                     break
                 except Exception:
                     if reservation:
                         mark_usage_pending(reservation)
                     search_errors.append("provider_error")
-                    provider_attempts.append({"query": query_count, "provider": provider_name, "outcome": "provider_error"})
+                    outcome = "web_provider_error" if attempt_stage == "web" else "provider_error"
+                    provider_attempts.append({"query": query_count, "provider": provider_name, "outcome": outcome})
                     break
             if not query_complete:
                 break

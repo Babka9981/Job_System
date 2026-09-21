@@ -82,6 +82,79 @@ class SearchProviderTests(TestCase):
         self.assertEqual(captured["params"]["maximum_number_of_urls"], 5)
         self.assertEqual(result[0].snippet, "candidate context, not evidence")
 
+    def test_brave_falls_back_to_web_search_only_for_explicit_plan_error(self):
+        calls = []
+
+        def transport(*, url, api_key, params, timeout, deadline, clock):
+            calls.append({"url": url, "params": params, "deadline": deadline})
+            if url == BraveSearchProvider.endpoint:
+                raise SearchProviderError("option_not_in_plan", "safe plan error")
+            return {"web": {"results": [{
+                "url": "https://acme.example/about",
+                "title": "About Acme",
+                "description": "candidate web snippet, not evidence",
+                "page_age": "2026-09-20T12:00:00Z",
+            }]}}
+
+        result = BraveSearchProvider(api_key="local-test", transport=transport).search(
+            "Acme product manager", max_results=3, deadline=100, clock=lambda: 0,
+        )
+
+        self.assertEqual([call["url"] for call in calls], [
+            "https://api.search.brave.com/res/v1/llm/context",
+            "https://api.search.brave.com/res/v1/web/search",
+        ])
+        self.assertEqual([call["deadline"] for call in calls], [100, 100])
+        self.assertEqual(calls[1]["params"], {"q": "Acme product manager", "count": 3, "safesearch": "strict"})
+        self.assertEqual(result, [SearchHit(
+            url="https://acme.example/about",
+            title="About Acme",
+            snippet="candidate web snippet, not evidence",
+            published_at="2026-09-20T12:00:00Z",
+        )])
+
+    def test_brave_fallback_cannot_return_at_shared_deadline(self):
+        class Clock:
+            value = 0
+
+            def __call__(self):
+                return self.value
+
+        clock = Clock()
+        calls = []
+
+        def transport(**kwargs):
+            calls.append(kwargs["url"])
+            if kwargs["url"] == BraveSearchProvider.endpoint:
+                clock.value = 9
+                raise SearchProviderError("option_not_in_plan", "safe plan error")
+            clock.value = 10
+            return {"web": {"results": []}}
+
+        provider = BraveSearchProvider(api_key="local-test", transport=transport)
+        with self.assertRaises(SearchProviderError) as caught:
+            provider.search("Acme", deadline=10, clock=clock)
+
+        self.assertEqual(caught.exception.code, "deadline_exceeded")
+        self.assertEqual(calls, [provider.endpoint, provider.web_endpoint])
+
+    def test_brave_does_not_fallback_for_other_4xx_or_quota(self):
+        failures = (
+            SearchProviderError("provider_error", "safe 4xx"),
+            SearchProviderUnavailable("quota_exceeded", "safe quota"),
+        )
+        for failure in failures:
+            with self.subTest(code=failure.code):
+                transport = mock.Mock(side_effect=failure)
+                provider = BraveSearchProvider(api_key="local-test", transport=transport)
+
+                with self.assertRaises(SearchProviderError) as caught:
+                    provider.search("Acme", deadline=100, clock=lambda: 0)
+
+                self.assertEqual(caught.exception.code, failure.code)
+                self.assertEqual(transport.call_count, 1)
+                self.assertEqual(transport.call_args.kwargs["url"], provider.endpoint)
+
     def test_brave_rejects_invalid_response_and_classifies_quota_without_leaking_key(self):
         provider = BraveSearchProvider(
             api_key="brave-secret-sentinel",
@@ -105,6 +178,61 @@ class SearchProviderTests(TestCase):
         self.assertEqual(request["method"], "GET")
         self.assertEqual(request["headers"]["X-Subscription-Token"], "brave-secret-sentinel")
         self.assertIn("?q=Acme", request["url"])
+
+    def test_brave_http_transport_exposes_only_safe_explicit_plan_code(self):
+        response_body = b'{"error":{"code":"OPTION_NOT_IN_PLAN","detail":"private response sentinel"}}'
+        with mock.patch(
+            "jobs.intelligence.search.brave.run_http_exchange",
+            return_value={"status": 400, "headers": {}, "body": response_body},
+        ):
+            with self.assertRaises(SearchProviderError) as caught:
+                brave_http_transport(
+                    url=BraveSearchProvider.endpoint,
+                    api_key="private-key-sentinel",
+                    params={"q": "Acme"},
+                    timeout=1,
+                    deadline=100,
+                    clock=lambda: 0,
+                )
+
+        self.assertEqual(caught.exception.code, "option_not_in_plan")
+        formatted = "".join(traceback.format_exception(caught.exception))
+        self.assertNotIn("private response sentinel", formatted)
+        self.assertNotIn("private-key-sentinel", formatted)
+
+    def test_brave_default_transport_does_not_fallback_for_other_structured_4xx(self):
+        response_body = b'{"error":{"code":"INVALID_REQUEST","detail":"private response sentinel"}}'
+        provider = BraveSearchProvider(api_key="private-key-sentinel")
+        with mock.patch(
+            "jobs.intelligence.search.brave.run_http_exchange",
+            return_value={"status": 400, "headers": {}, "body": response_body},
+        ) as exchange:
+            with self.assertRaises(SearchProviderError) as caught:
+                provider.search("Acme", deadline=100, clock=lambda: 0)
+
+        self.assertEqual(caught.exception.code, "provider_error")
+        self.assertEqual(exchange.call_count, 1)
+        formatted = "".join(traceback.format_exception(caught.exception))
+        self.assertNotIn("private response sentinel", formatted)
+        self.assertNotIn("private-key-sentinel", formatted)
+
+    def test_brave_default_transport_caps_plan_fallback_at_two_requests(self):
+        responses = [
+            {"status": 400, "headers": {}, "body": b'{"error":{"code":"OPTION_NOT_IN_PLAN"}}'},
+            {"status": 400, "headers": {}, "body": b'{"error":{"code":"OPTION_NOT_IN_PLAN"}}'},
+        ]
+        provider = BraveSearchProvider(api_key="private-key-sentinel")
+        with mock.patch(
+            "jobs.intelligence.search.brave.run_http_exchange", side_effect=responses,
+        ) as exchange:
+            with self.assertRaises(SearchProviderError) as caught:
+                provider.search("Acme", deadline=100, clock=lambda: 0)
+
+        self.assertEqual(caught.exception.code, "option_not_in_plan")
+        self.assertEqual(exchange.call_count, 2)
+        request_urls = [call.args[0]["url"] for call in exchange.call_args_list]
+        self.assertIn("/res/v1/llm/context?", request_urls[0])
+        self.assertIn("/res/v1/web/search?", request_urls[1])
 
     def test_tavily_is_unavailable_without_local_key(self):
         with mock.patch.dict("os.environ", {}, clear=True):
@@ -611,6 +739,117 @@ class ResearchServiceTests(TestCase):
         self.assertEqual(len(result.coverage["provider_attempts"]), 5)
         self.assertEqual(UsageReservation.objects.filter(status="released").count(), 3)
         self.assertTrue(UsageLedger.objects.filter(metadata__provider="brave").exists())
+
+    def test_brave_plan_fallback_respects_five_physical_request_cap(self):
+        self.profile.preferences = {"daily_budget_usd": "1.00", "search_provider": "brave"}
+        self.profile.save(update_fields=["preferences"])
+        calls = []
+
+        def transport(**kwargs):
+            calls.append(kwargs["url"])
+            if kwargs["url"] == BraveSearchProvider.endpoint:
+                raise SearchProviderError("option_not_in_plan", "safe plan error")
+            return {"web": {"results": [{
+                "url": "https://acme.example/about",
+                "title": "About",
+                "description": "candidate only",
+            }]}}
+
+        provider = BraveSearchProvider(api_key="brave-test", transport=transport)
+        fetcher = mock.Mock()
+        fetcher.fetch.return_value = {
+            "url": "https://acme.example/about",
+            "content": "Acme builds payment infrastructure for global merchants.",
+            "checked_at": timezone.now(),
+        }
+        with mock.patch.dict(
+            "os.environ", {"BRAVE_LLM_CONTEXT_COST_USD": "0.01"}, clear=False,
+        ):
+            result = research(
+                self.vacancy,
+                domain="acme.example",
+                profile=self.profile,
+                provider=provider,
+                fetcher=fetcher,
+                gateway=self.ValidGateway(),
+            )
+
+        self.assertEqual(calls, [
+            provider.endpoint, provider.web_endpoint,
+            provider.endpoint, provider.web_endpoint,
+            provider.endpoint,
+        ])
+        self.assertEqual(result.coverage["queries"], 5)
+        self.assertEqual(result.coverage["provider_attempts"], [
+            {"query": 1, "provider": "brave", "outcome": "option_not_in_plan"},
+            {"query": 1, "provider": "brave", "outcome": "web_success"},
+            {"query": 2, "provider": "brave", "outcome": "option_not_in_plan"},
+            {"query": 2, "provider": "brave", "outcome": "web_success"},
+            {"query": 3, "provider": "brave", "outcome": "option_not_in_plan"},
+            {"query": 3, "provider": "brave", "outcome": "web_query_limit"},
+        ])
+        self.assertEqual(UsageLedger.objects.filter(metadata__provider="brave").count(), 5)
+
+    def test_brave_plan_fallback_budget_denial_prevents_second_http_request(self):
+        self.profile.preferences = {"daily_budget_usd": "0.01", "search_provider": "brave"}
+        self.profile.save(update_fields=["preferences"])
+        calls = []
+
+        def transport(**kwargs):
+            calls.append(kwargs["url"])
+            if kwargs["url"] == BraveSearchProvider.endpoint:
+                raise SearchProviderError("option_not_in_plan", "safe plan error")
+            return {"web": {"results": []}}
+
+        provider = BraveSearchProvider(api_key="brave-test", transport=transport)
+        with mock.patch.dict(
+            "os.environ", {"BRAVE_LLM_CONTEXT_COST_USD": "0.01"}, clear=False,
+        ):
+            result = research(
+                self.vacancy,
+                domain="acme.example",
+                profile=self.profile,
+                provider=provider,
+                fetcher=mock.Mock(),
+                gateway=self.ValidGateway(),
+            )
+
+        self.assertEqual(calls, [provider.endpoint])
+        self.assertEqual(result.coverage["queries"], 1)
+        self.assertEqual(result.coverage["provider_attempts"], [
+            {"query": 1, "provider": "brave", "outcome": "option_not_in_plan"},
+            {"query": 1, "provider": "brave", "outcome": "web_budget_pending"},
+        ])
+        self.assertEqual(UsageLedger.objects.filter(metadata__provider="brave").count(), 1)
+
+    def test_brave_plan_fallback_records_web_request_failure(self):
+        self.profile.preferences = {"daily_budget_usd": "1.00", "search_provider": "brave"}
+        self.profile.save(update_fields=["preferences"])
+
+        def transport(**kwargs):
+            if kwargs["url"] == BraveSearchProvider.endpoint:
+                raise SearchProviderError("option_not_in_plan", "safe plan error")
+            raise SearchProviderUnavailable("quota_exceeded", "safe quota error")
+
+        provider = BraveSearchProvider(api_key="brave-test", transport=transport)
+        with mock.patch.dict(
+            "os.environ", {"BRAVE_LLM_CONTEXT_COST_USD": "0.01"}, clear=False,
+        ):
+            result = research(
+                self.vacancy,
+                domain="acme.example",
+                profile=self.profile,
+                provider=provider,
+                fetcher=mock.Mock(),
+                gateway=self.ValidGateway(),
+            )
+
+        self.assertEqual(result.coverage["queries"], 2)
+        self.assertEqual(result.coverage["provider_attempts"], [
+            {"query": 1, "provider": "brave", "outcome": "option_not_in_plan"},
+            {"query": 1, "provider": "brave", "outcome": "web_quota_exceeded"},
+        ])
+        self.assertEqual(UsageReservation.objects.filter(status="released").count(), 1)
 
     def test_needs_domain_keeps_fallback_attempts_errors_and_progress(self):
         self.profile.preferences = {"daily_budget_usd": "1.00", "search_provider": "auto"}

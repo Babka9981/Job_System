@@ -35,6 +35,13 @@ def _http_transport(*, url, api_key, params, timeout, deadline, clock, process_f
     if status >= 500:
         raise SearchProviderUnavailable("provider_unavailable", "Brave временно недоступен.")
     if status != 200:
+        try:
+            error_body = json.loads(result["body"])
+        except (KeyError, TypeError, ValueError, UnicodeDecodeError):
+            error_body = None
+        error = error_body.get("error") if isinstance(error_body, dict) else None
+        if isinstance(error, dict) and error.get("code") == "OPTION_NOT_IN_PLAN":
+            raise SearchProviderError("option_not_in_plan", "Тариф Brave не включает LLM Context.")
         raise SearchProviderError("provider_error", "Brave отклонил поисковый запрос.")
     parsed = None
     try:
@@ -60,6 +67,7 @@ class BraveSearchProvider:
     """Brave LLM Context is used only to discover candidate URLs."""
 
     endpoint = "https://api.search.brave.com/res/v1/llm/context"
+    web_endpoint = "https://api.search.brave.com/res/v1/web/search"
     provider_name = "brave"
     price_env = "BRAVE_LLM_CONTEXT_COST_USD"
     is_mock = False
@@ -73,7 +81,7 @@ class BraveSearchProvider:
     def deadline_ready(self):
         return _deadline_aware(self.transport)
 
-    def search(self, query: str, *, max_results: int = 5, deadline=None, clock=None) -> list[SearchHit]:
+    def _search_endpoint(self, query, *, max_results, deadline, clock, web):
         if not self.api_key:
             raise SearchProviderUnavailable("missing_api_key", "Brave API key не настроен.")
         query = " ".join(str(query).split())
@@ -86,35 +94,75 @@ class BraveSearchProvider:
         if not self.deadline_ready:
             raise SearchProviderUnavailable("unsafe_transport", "Search transport не поддерживает отменяемый deadline.")
         limit = min(max(1, int(max_results)), 5)
+        is_web = web
+        if is_web:
+            url = self.web_endpoint
+            params = {"q": query[:500], "count": limit, "safesearch": "strict"}
+        else:
+            url = self.endpoint
+            params = {
+                    "q": query[:500],
+                    "count": limit,
+                    "maximum_number_of_urls": limit,
+                    "maximum_number_of_tokens": 1024,
+                    "maximum_number_of_tokens_per_url": 512,
+                    "safesearch": "strict",
+            }
         body = self.transport(
-            url=self.endpoint,
+            url=url,
             api_key=self.api_key,
-            params={
-                "q": query[:500],
-                "count": limit,
-                "maximum_number_of_urls": limit,
-                "maximum_number_of_tokens": 1024,
-                "maximum_number_of_tokens_per_url": 512,
-                "safesearch": "strict",
-            },
+            params=params,
             timeout=min(self.timeout, deadline - clock()),
             deadline=deadline,
             clock=clock,
         )
-        if clock() > deadline:
+        if clock() >= deadline:
             raise SearchProviderError("deadline_exceeded", "Истёк лимит времени веб-поиска.")
-        grounding = body.get("grounding") if isinstance(body, dict) else None
-        items = grounding.get("generic") if isinstance(grounding, dict) else None
+        if not is_web:
+            grounding = body.get("grounding") if isinstance(body, dict) else None
+            items = grounding.get("generic") if isinstance(grounding, dict) else None
+        else:
+            web_payload = body.get("web") if isinstance(body, dict) else None
+            items = web_payload.get("results") if isinstance(web_payload, dict) else None
         if not isinstance(items, list):
             raise SearchProviderError("invalid_response", "Brave вернул некорректный ответ.")
         hits = []
         for item in items[:limit]:
             if not isinstance(item, dict) or not isinstance(item.get("url"), str):
                 continue
-            snippets = item.get("snippets") if isinstance(item.get("snippets"), list) else []
+            if not is_web:
+                snippets = item.get("snippets") if isinstance(item.get("snippets"), list) else []
+                snippet = " ".join(str(value) for value in snippets)
+                published_at = None
+            else:
+                snippet = str(item.get("description") or "")
+                published_at = str(item.get("page_age") or "") or None
             hits.append(SearchHit(
                 url=item["url"],
                 title=str(item.get("title") or "")[:500],
-                snippet=" ".join(str(value) for value in snippets)[:2000],
+                snippet=snippet[:2000],
+                published_at=published_at,
             ))
         return hits
+
+    def search_context(self, query: str, *, max_results: int = 5, deadline=None, clock=None) -> list[SearchHit]:
+        return self._search_endpoint(
+            query, max_results=max_results, deadline=deadline, clock=clock, web=False,
+        )
+
+    def search_web(self, query: str, *, max_results: int = 5, deadline=None, clock=None) -> list[SearchHit]:
+        return self._search_endpoint(
+            query, max_results=max_results, deadline=deadline, clock=clock, web=True,
+        )
+
+    def search(self, query: str, *, max_results: int = 5, deadline=None, clock=None) -> list[SearchHit]:
+        try:
+            return self.search_context(
+                query, max_results=max_results, deadline=deadline, clock=clock,
+            )
+        except SearchProviderError as exc:
+            if exc.code != "option_not_in_plan":
+                raise
+        return self.search_web(
+            query, max_results=max_results, deadline=deadline, clock=clock,
+        )
