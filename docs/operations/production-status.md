@@ -5,9 +5,9 @@
 
 ## Развёрнуто и проверено
 
-- Commit `622d52c` находится в GitHub/main и развёрнут на VPS `169.58.93.185` в
-  `/srv/job-system`; входящий product commit T17 — `eafa798`.
-- Immutable image tag: `20260921T135406Z`; compose project: `job-system`; container healthy.
+- VPS repo deployment commit — `c36ea5d`; GitHub/main включает этот deployment commit
+  и последующую документацию. Product commits T17–T20: `eafa798`, `05fcfe5`, `4bbeb07`, `7c790b2`.
+- Immutable image tag: `20260921T154656Z`; compose project: `job-system`; container healthy.
 - Web привязан только к `127.0.0.1:18111` и опубликован через Caddy как
   `https://job.web3babka.su`.
 - Container healthy, HTTPS health endpoint отвечает успешно; login и static endpoints
@@ -32,13 +32,16 @@
 - Production OpenAI model/profile — `gpt-5-mini`; настроены цены за миллион токенов:
   input `0.25`, cached input `0.025`, output `2.00`. API key настроен без записи значения;
   read-only `GET /v1/models/gpt-5-mini` вернул HTTP 200.
+- Дневной бюджет profile — `5`; OpenAI worker и transport bounded 120 секунд; profile
+  extraction output default и production — 8000 токенов.
 - Brave LLM Context возвращает `OPTION_NOT_IN_PLAN`; application fallback на Brave Web
   Search проверен live и вернул один результат.
 - Созданы encrypted backups `job-system-20260921T090715Z.tar.age`, pre-update
   `job-system-20260921T103955Z.tar.age`, pre-T15
   `job-system-20260921T115026Z.tar.age` и pre-T16
   `job-system-20260921T125955Z.tar.age`; перед T17 создан
-  `job-system-20260921T135346Z.tar.age`. Правила доступа к файлам проверены.
+  `job-system-20260921T135346Z.tar.age`; финальный pre-update backup —
+  `job-system-20260921T154633Z.tar.age`. Правила доступа к файлам проверены.
 
 ## Проверки T16
 
@@ -58,11 +61,20 @@
 - CV не отправлялся, paid inference не выполнялся.
 - Production health и login отвечают HTTP 200; Eggent — HTTP 307, SkyPay и blog — HTTP 200.
 
+## Финальные проверки T17–T20
+
+- Локально: Django 374 passed, 1 skipped; Node UI 10 passed; final blind 6 targeted PASS.
+- Durable proposed profile draft v2 содержит 42 неподтверждённых элемента: 26 facts,
+  15 questions и 1 about; `load_profile_draft` и UI path проверены.
+- `confirmed_version=0`, подтверждённых facts 0; monitoring остаётся выключенным до
+  ручного подтверждения профиля.
+- Usage ledger: одна settled запись стоимостью `0.0105`, четыре pending, zero reserved.
+- Production HTTPS health/login отвечают HTTP 200; Eggent — HTTP 307, SkyPay и blog — HTTP 200.
+
 ## Ожидает ручного действия
 
-- Production-проверка вернула `profiles=1`, `resumes=1`, `confirmed_profiles=0`: CV
-  загружен, но подтверждённых профилей нет; monitoring остаётся выключенным до подтверждения.
-- Перед генерацией отклика owner должен выбрать положительный `daily_budget_usd`.
+- Proposed profile draft нужно вручную проверить и подтвердить; до этого monitoring выключен.
+- Четыре pending usage-записи требуют reconciliation; reserved-записей нет.
 - `TELEGRAM_API_ID` и `TELEGRAM_API_HASH` пока пусты, поэтому MTProto reader отложен.
 - Encrypted backup нужно скачать на доверенную машину, расшифровать private AGE identity,
   которая не хранится на VPS, и выполнить off-server verification.

@@ -50,9 +50,8 @@ $env:JOB_IMAGE_TAG = 'local-check'
 docker compose build web
 ```
 
-Последняя полная проверка: targeted 143 passed; Django 367 passed, 1 skipped; Node UI
-10 passed; browser matrix 50 scans; blind relevant 50 passed. Воспроизводимые
-`check --deploy`, acceptance и restore-команды описаны в
+Последняя полная проверка: Django 374 passed, 1 skipped; Node UI 10 passed; final blind
+6 targeted checks passed. Воспроизводимые `check --deploy`, acceptance и restore-команды описаны в
 `README.md`, `docs/acceptance/pilot-acceptance.md` и `docs/operations/README.md`.
 
 ## Структура
@@ -99,6 +98,8 @@ deployment/              Docker/Caddy/systemd, wizard, backup и restore
 6. `run_cycle` под global lease выполняет collection → matching → durable checkpoint → `NotificationOutbox`; Telegram Bot delivery отделена от MTProto reader.
 7. SQLite и private/CV state постоянны; temporary source content, sessions, caches и secrets физически исключены из snapshot. Backup шифруется `age`, private identity хранится вне VPS.
 8. Profile показывает извлечённый CV как читаемый preview в обычных блоках и сохраняет secondary exact raw view; `Resume.text` и вход LLM остаются исходным точным текстом.
+9. Profile extraction хранит durable proposed draft до ручного подтверждения; `load_profile_draft(profile, proposed_version, token)` возвращает его в UI после reload, а подтверждение единственным CAS-переходом обновляет `confirmed_version`.
+10. OpenAI transport и subprocess worker ограничены абсолютным hard deadline 120 секунд; явный более короткий deadline не расширяется, timeout убивает и reap-ит worker.
 
 ## Соглашения кода
 
@@ -122,7 +123,7 @@ deployment/              Docker/Caddy/systemd, wizard, backup и restore
 - Monitoring/cache: `JOB_MONITORING_SCHEDULE`, `JOB_MONITORING_ENABLED`, `JOB_MONITORING_LEASE_SECONDS`, `JOB_NOTIFICATION_MAX_ATTEMPTS`, `JOB_MATCH_CACHE_ROOT`, `JOB_MATCH_CACHE_TIMEOUT_SECONDS`.
 - Telegram reader/bot: `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `TELEGRAM_SESSION_PATH`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_CHAT_ID`.
 - Keyed sources: `WEB3_CAREER_API_TOKEN`, `WEB3_CAREER_FULL_DESCRIPTION_CONFIRMED`, `CRYPTOJOBS_LIST_API_KEY`, `CRYPTOJOBS_LIST_FULL_DESCRIPTION_CONFIRMED`, `REMOTE_ROCKETSHIP_API_KEY`, `REMOTE_ROCKETSHIP_ENABLED`, `REMOTE_ROCKETSHIP_ACTIVE_PLAN_CONFIRMED`.
-- AI/search/cost: `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_PRICES_JSON`, `TAVILY_API_KEY`, `TAVILY_COST_PER_CREDIT_USD`, `BRAVE_SEARCH_API_KEY`, `BRAVE_LLM_CONTEXT_COST_USD`.
+- AI/search/cost: `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_PRICES_JSON`, `JOB_PROFILE_MAX_INPUT_TOKENS`, `JOB_PROFILE_MAX_OUTPUT_TOKENS`, `TAVILY_API_KEY`, `TAVILY_COST_PER_CREDIT_USD`, `BRAVE_SEARCH_API_KEY`, `BRAVE_LLM_CONTEXT_COST_USD`.
 - Backup: `BACKUP_AGE_RECIPIENT`; private `age` identity никогда не размещается на VPS.
 
 ## Тесты
@@ -140,13 +141,14 @@ deployment/              Docker/Caddy/systemd, wizard, backup и restore
 - Registry инициализирован 50 источниками (`9 site + 41 telegram`), но это catalog coverage, не утверждение о 50 live integrations; restricted/paid sources честно остаются `needs_access`/disabled.
 - Matching cache долговечен и приватен; его ключ включает точный текст вакансии, criteria и profile version, а `force` не возвращает stale cache.
 - `temporary/`, `.env`, Telegram sessions, WAL/SHM и caches не входят в backup; snapshot принимает только format 1 и точный allowlist.
-- Production: GitHub/main и VPS repo commit `622d52c` (входящий product commit T17 `eafa798`), image `20260921T135406Z`, VPS `169.58.93.185`, `/srv/job-system`, compose project `job-system`, bind `127.0.0.1:18111`; container healthy, HTTPS health/login отвечают HTTP 200. Preview CSS присутствует в collected static и доступен по HTTP 200.
+- Production: VPS repo deployment commit `c36ea5d`; GitHub/main включает этот deployment commit и последующую документацию. Product commits T17–T20: `eafa798`, `05fcfe5`, `4bbeb07`, `7c790b2`. Image `20260921T154656Z`, VPS `169.58.93.185`, `/srv/job-system`, compose project `job-system`, bind `127.0.0.1:18111`; container healthy, HTTPS health/login отвечают HTTP 200.
 - Caddy backup: `/etc/caddy/Caddyfile.before-job-system-20260921T044832Z`; после T15 Eggent отвечает HTTP 307, SkyPay и blog — HTTP 200.
 - Owner создан: `active_owners=1`, usable password — `true` без записи значения; signup/register закрыт и возвращает 404. Health остаётся ok.
-- Production OpenAI model/profile — `gpt-5-mini`; цены за миллион токенов: input `0.25`, cached input `0.025`, output `2.00`. API key настроен; read-only `GET /v1/models/gpt-5-mini` отвечает HTTP 200. Начальная ошибка model/price исправлена; exact action остановлена до transport, потому что `daily_budget_usd=0.0000`: CV не отправлен и paid inference не выполнен. Перед генерацией отклика owner должен выбрать положительный дневной бюджет.
+- Production OpenAI model/profile — `gpt-5-mini`; цены за миллион токенов: input `0.25`, cached input `0.025`, output `2.00`; дневной бюджет `5`. API key настроен без раскрытия. Worker и transport bounded 120 секунд; profile output default и production — 8000 токенов.
 - Tavily, Brave Search, Telegram Bot/owner chat и публичный `BACKUP_AGE_RECIPIENT` настроены; Tavily search, Telegram `getMe`/`getChat` и application fallback Brave Context `OPTION_NOT_IN_PLAN` → Web Search проверены live без раскрытия credentials. `TELEGRAM_API_ID`/`TELEGRAM_API_HASH` пусты, MTProto отложен.
-- Cleanup и backup timers активны; дополнительно создан pre-T17 encrypted backup `job-system-20260921T135346Z.tar.age`. Off-server decrypt/verification и restore drill ещё не выполнены; private AGE identity остаётся вне VPS.
-- Production-проверка: `profiles=1`, `resumes=1`, `confirmed_profiles=0`; CV загружен, но подтверждённых профилей нет, поэтому monitoring остаётся выключенным до подтверждения.
+- Cleanup и backup timers активны; последний encrypted backup — `job-system-20260921T154633Z.tar.age`. Off-server decrypt/verification и restore drill ещё не выполнены; private AGE identity остаётся вне VPS.
+- Durable proposed profile draft v2 доступен через `load_profile_draft` и UI: 42 неподтверждённых элемента — 26 facts, 15 questions, 1 about. `confirmed_version=0`, подтверждённых facts 0; monitoring остаётся выключенным до ручного подтверждения.
+- Usage: одна settled запись стоимостью `0.0105`, четыре pending, zero reserved; pending требует отдельной reconciliation, а не повторного списания.
 
 ## Как здесь работает Autopilot
 
