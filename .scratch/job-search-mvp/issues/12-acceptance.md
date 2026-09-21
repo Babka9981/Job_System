@@ -1,7 +1,7 @@
 # 12 — Сквозная приёмка пилота и дизайн-аудит
 
-Status: ready-for-agent
-Execution: not-started; запуск только по отдельной команде пользователя
+Status: done
+Execution: completed locally 2026-09-21; live production checks remain explicitly separate
 GitHub-Issue: #12 — https://github.com/Babka9981/Job_System/issues/12
 Blocked by: 01,02,03,04,05,06,07,08,09,10,11
 Волна: 7
@@ -32,13 +32,13 @@ Blocked by: 01,02,03,04,05,06,07,08,09,10,11
 
 ## Критерии приёмки
 
-- [ ] Все 10 критериев исходного ТЗ имеют evidence + verified/mock-only/blocked status.
-- [ ] 50 источников заведены, фактическое покрытие честно посчитано; live Himalayas/Jobicy повтор не дублирует.
-- [ ] Полный путь CV-confirm → collect → match → research → оба draft → edit/copy → status → digest проверен.
-- [ ] Обе темы на 1920/1280/992/768/390, keyboard/drawer/focus, 200% text, no page overflow.
-- [ ] Axe serious/critical=0, контраст текста >=4.5:1, clean console; состояния loading/empty/error/403/conflict/offline.
-- [ ] SSRF/permissions/CSRF/prompt-injection/budget/TTL/restart отрицательные тесты проходят.
-- [ ] Независимая проверка по исходному брифу, отклонения/непроверенные интеграции перечислены; поставка названа пилотом.
+- [x] Все 10 критериев исходного ТЗ имеют evidence + verified/mock-only/blocked status.
+- [x] 50 источников заведены, фактическое покрытие честно посчитано; live Himalayas/Jobicy повтор не дублирует.
+- [x] Полный путь CV-confirm → collect → match → research → оба draft → edit/copy → status → digest проверен.
+- [x] Обе темы на 1920/1280/992/768/390, keyboard/drawer/focus, 200% text, no page overflow.
+- [x] Axe serious/critical=0, контраст текста >=4.5:1, clean console; состояния loading/empty/error/403/conflict/offline.
+- [x] SSRF/permissions/CSRF/prompt-injection/budget/TTL/restart отрицательные тесты проходят.
+- [x] Независимая проверка по исходному брифу, отклонения/непроверенные интеграции перечислены; поставка названа пилотом.
 
 ## Проверки и свидетельства
 

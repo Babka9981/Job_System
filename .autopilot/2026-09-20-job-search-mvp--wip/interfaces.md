@@ -176,4 +176,12 @@ Content permission проверяется до LLM; CV/Search/Jobs недове�
 - Compose project `job-system` слушает только `127.0.0.1:18111`; Caddy публикует `job.web3babka.su` отдельным site block.
 - Operations CLI выполняет TTL cleanup, SQLite snapshot и restore verification; backup шифруется `age` public recipient, identity хранится вне VPS.
 - Backup retention 30 дней удаляется только после новой успешной копии и всегда сохраняет newest.
-- `scripts/setup-integrations.sh` — repeatable 7-stage local `.env` wizard; MTProto stage можно отложить.
+- `deployment/setup-wizard.sh` — repeatable 7-stage local `.env` wizard; MTProto stage можно отложить.
+
+# Из таска 12 — сквозная приёмка пилота
+
+- `npm run test:browser` запускает изолированный Chrome/Playwright/Axe audit на ephemeral port и временной DB/session.
+- Каждый browser scan fail-closed проверяет HTTP 2xx, exact protected URL, owner/app-shell markers и отсутствие login redirect.
+- `verify_snapshot(path)` принимает только format=1 и точный allowlist; исключается лишь корневой `payload/manifest.json`.
+- `CycleExecutionError` — безопасная публичная monitoring-ошибка без secret-bearing cause/context.
+- Evidence matrix: `docs/acceptance/pilot-acceptance.md`; live API/VPS проверки отделены от локальной acceptance.

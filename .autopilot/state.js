@@ -12,7 +12,7 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/IliaF/.codex/skills/autopilot",
   "startedAt": "2026-09-20T15:27:16+03:00",
-  "updatedAt": "2026-09-21T04:06:19+03:00",
+  "updatedAt": "2026-09-21T05:29:05+03:00",
   "finishedAt": null,
   "stages": [
     {"id":"preflight","status":"done","startedAt":"2026-09-20T15:27:16+03:00","finishedAt":"2026-09-20T15:46:44+03:00","note":"Репозиторий и исходные документы проверены"},
@@ -20,11 +20,11 @@ window.STATE =
     {"id":"briefing","status":"done","finishedAt":"2026-09-20T15:46:44+03:00","note":"OpenAI, настраиваемый поиск, CV extraction; search provider уточняется перед T08"},
     {"id":"spec","status":"done","finishedAt":"2026-09-20T15:46:44+03:00","note":"Независимая проверка пройдена"},
     {"id":"plan","status":"done","finishedAt":"2026-09-20T15:46:44+03:00","note":"12 тикетов; реализация ожидает команды"},
-    {"id":"build","status":"active","startedAt":"2026-09-20T16:05:00+03:00","note":"T01–T11 и T13 завершены; далее T12 acceptance"},
-    {"id":"review","status":"active","startedAt":"2026-09-20T16:40:00+03:00","note":"Приняты T01–T11 и T13; craft concerns сохранены для whole-project pass"},
-    {"id":"final","status":"pending"}
+    {"id":"build","status":"done","startedAt":"2026-09-20T16:05:00+03:00","finishedAt":"2026-09-21T05:29:05+03:00","note":"T01–T13 завершены"},
+    {"id":"review","status":"done","startedAt":"2026-09-20T16:40:00+03:00","finishedAt":"2026-09-21T05:29:05+03:00","note":"Все таски приняты; T12 recovery закрыла blocking findings"},
+    {"id":"final","status":"active","startedAt":"2026-09-21T05:29:05+03:00","note":"Слепая приёмка: локальный пилот принят; production deploy/live integrations ожидают явного внешнего gate"}
   ],
-  "requirements":{"total":85,"done":81,"inTicket":4,"inSpec":0,"placeholder":0,"deferred":0,"dropped":0},
+  "requirements":{"total":85,"done":85,"inTicket":0,"inSpec":0,"placeholder":0,"deferred":0,"dropped":0},
   "tickets":[
   {
     "id": "01",
@@ -448,9 +448,13 @@ window.STATE =
       "tests/acceptance/",
       "docs/acceptance/"
     ],
-    "status": "pending",
+    "status": "done",
+    "startedAt": "2026-09-21T04:10:00+03:00",
+    "finishedAt": "2026-09-21T05:29:05+03:00",
+    "commit": "af87dd9",
+    "tests": "Django 355/355 (1 skipped); acceptance 4; Node 10/10; parallel browser 50+50 scans; axe serious/critical 0; restore faults pass; migration drift none; pip check clean",
     "retries": 0,
-    "repairs": 0,
+    "repairs": 2,
     "handoffs": 0,
     "githubIssue": "https://github.com/Babka9981/Job_System/issues/12"
   },
@@ -472,7 +476,9 @@ window.STATE =
     "githubIssue": null
   }
 ],"singlePass":null,"tests":null,
-  "debt":{"placeholders":[],"assumptions":[],"emptyEnv":[]},
-  "additions":[],"coverage":{"found":9,"fixed":9,"deferred":0,"note":"7 замечаний спецификации и 2 контракта/плана исправлены"},"concerns":["T01: интерактивный browser smoke не стартовал из-за failed to write kernel assets; UI покрыт HTTP/JS/ARIA и bootstrap Node-тестами","T01: process-local login throttle до deployment должен получить общий атомарный cache backend","T01: проект закрепляет Python 3.13.15, локальный runner проверки был 3.13.7"],
-  "reviewers":{"manifestSpec":"/root/spec_check","craft":"/root/craft_review"},"blind":null
+  "debt":{"placeholders":[],"assumptions":[],"emptyEnv":["DJANGO_SECRET_KEY","OPENAI_API_KEY","TAVILY_API_KEY or BRAVE_SEARCH_API_KEY","TELEGRAM_BOT_TOKEN","TELEGRAM_OWNER_CHAT_ID","TELEGRAM_API_ID","TELEGRAM_API_HASH","AGE_RECIPIENT"]},
+  "additions":[],"coverage":{"found":9,"fixed":9,"deferred":0,"note":"7 замечаний спецификации и 2 контракта/плана исправлены"},
+  "reviewers":{"manifestSpec":"/root/spec_check","craft":"/root/craft_review"},
+  "blind":{"status":"partial","checkedAt":"2026-09-21T05:29:05+03:00","agreed":["local single-owner app","profile/CV","50-source registry","matching","research/drafts","monitoring contracts","backup bundle","design audit"],"drift":["live source API repeats not run","Telegram reader/bot not run with credentials","VPS deploy/HTTPS/restart/restore not performed","real Tavily/Brave/OpenAI calls not run"],"commands":"migrate OK; browser seed OK; runserver HTTP 200 on protected routes; acceptance 4/4"},
+  "concerns":["DROP T01 browser smoke concern: superseded by T12 real Chrome/Axe 50-scan audit","REPORT Login throttle remains process-local until deployment selects a shared atomic cache backend","REPORT Local verification used Python 3.13.7 while the production image pins Python 3.13.15","REPORT Production deploy, live provider calls, Telegram delivery and VPS restore drill require explicit external gate"]
 }
