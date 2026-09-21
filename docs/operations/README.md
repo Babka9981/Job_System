@@ -1,9 +1,10 @@
 # Job System: production operations
 
 Статус на 2026-09-21: production-развёртывание выполнено и проверено; точный снимок
-версии, сервисов и оставшихся ручных шагов — в `production-status.md`. Live API,
-первый backup и restore drill не считаются проверенными без отдельных операторских
-действий, описанных ниже.
+версии, сервисов и оставшихся ручных шагов — в `production-status.md`. OpenAI,
+Tavily, Brave Web Search и Telegram Bot API проверены без раскрытия credentials;
+encrypted backups создаются по расписанию. Off-server decrypt/verification и restore
+drill ещё требуют отдельных операторских действий, описанных ниже.
 
 ## Изоляция и подтверждённый target
 
@@ -105,11 +106,14 @@ sudo systemctl enable --now job-system-monitor.timer job-system-cleanup.timer jo
 systemctl list-timers 'job-system-*'
 ```
 
-На 2026-09-21 включён только `job-system-cleanup.timer`. Не включать monitor и backup
-таймеры, пока локальный wizard не подготовит production credentials и публичный
-`BACKUP_AGE_RECIPIENT`. Owner уже создан интерактивно: `active_owners=1`, usable
-password — `true`; значение пароля не записывать в документы, shell history или файлы.
-External env keys остаются пустыми, `JOB_MONITORING_ENABLED=false`, MTProto reader отложен.
+На 2026-09-21 `job-system-cleanup.timer` и `job-system-backup.timer` включены и активны.
+`job-system-monitor.timer` остаётся выключенным: профиль и настройки существуют, но
+`confirmed_version=0`; перед включением мониторинга owner должен загрузить и подтвердить
+CV/профиль. OpenAI, Tavily, Brave Search, Telegram Bot и публичный
+`BACKUP_AGE_RECIPIENT` настроены. `TELEGRAM_API_ID` и `TELEGRAM_API_HASH` пока пусты,
+поэтому MTProto reader отложен. Owner создан интерактивно: `active_owners=1`, usable
+password — `true`; значения credentials не записывать в документы, shell history или
+файлы.
 
 ## Обновление, migration и rollback
 
@@ -160,6 +164,11 @@ curl -fsS -H 'X-Forwarded-Proto: https' http://127.0.0.1:18111/healthz/
 Telegram sessions, не рассматривается для копирования. Затем snapshot немедленно шифруется `age`. На VPS находится только
 public `BACKUP_AGE_RECIPIENT`; private identity остаётся вне сервера. После успешного
 создания новой копии удаляются копии старше 30 дней, но newest successful не удаляется.
+
+На 2026-09-21 на VPS подтверждены две encrypted copies:
+`job-system-20260921T090715Z.tar.age` и pre-update
+`job-system-20260921T103955Z.tar.age`; backup timer активен. Наличие archive на VPS не
+заменяет off-server decrypt/verification и restore drill.
 
 ```bash
 cd /srv/job-system/deployment

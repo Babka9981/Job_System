@@ -50,7 +50,7 @@ $env:JOB_IMAGE_TAG = 'local-check'
 docker compose build web
 ```
 
-Последняя полная проверка: Django 355 passed, 1 skipped; Node 10 tests; browser matrix
+Последняя полная проверка: Django 363 passed, 1 skipped; Node 10 tests; browser matrix
 50 scans. Воспроизводимые `check --deploy`, acceptance и restore-команды описаны в
 `README.md`, `docs/acceptance/pilot-acceptance.md` и `docs/operations/README.md`.
 
@@ -138,10 +138,12 @@ deployment/              Docker/Caddy/systemd, wizard, backup и restore
 - Registry инициализирован 50 источниками (`9 site + 41 telegram`), но это catalog coverage, не утверждение о 50 live integrations; restricted/paid sources честно остаются `needs_access`/disabled.
 - Matching cache долговечен и приватен; его ключ включает точный текст вакансии, criteria и profile version, а `force` не возвращает stale cache.
 - `temporary/`, `.env`, Telegram sessions, WAL/SHM и caches не входят в backup; snapshot принимает только format 1 и точный allowlist.
-- Production: commit `8bd45ea`, image `20260921T044606Z`, VPS `169.58.93.185`, `/srv/job-system`, compose project `job-system`, bind `127.0.0.1:18111`; HTTPS health, login/static и controlled restart проверены 21.09.2026.
+- Production: commit `bbeb12b` (product `54dcee4`), image `20260921T104205Z`, VPS `169.58.93.185`, `/srv/job-system`, compose project `job-system`, bind `127.0.0.1:18111`; container healthy, HTTPS health, login/static и controlled restart проверены 21.09.2026.
 - Caddy backup: `/etc/caddy/Caddyfile.before-job-system-20260921T044832Z`; Eggent, SkyPay и blog после deploy проверены и продолжают отвечать.
 - Owner создан: `active_owners=1`, usable password — `true` без записи значения; signup/register закрыт и возвращает 404. Health остаётся ok.
-- External env keys пусты, `JOB_MONITORING_ENABLED=false`; включён только cleanup timer. Monitor/backup timers выключены до локального wizard, production credentials и публичного `BACKUP_AGE_RECIPIENT`; MTProto отложен. Live APIs, первый encrypted backup и restore drill ещё не подтверждены.
+- OpenAI, Tavily, Brave Search, Telegram Bot/owner chat и публичный `BACKUP_AGE_RECIPIENT` настроены; OpenAI auth, Tavily search, Telegram `getMe`/`getChat` и application fallback Brave Context `OPTION_NOT_IN_PLAN` → Web Search проверены live без раскрытия credentials. `TELEGRAM_API_ID`/`TELEGRAM_API_HASH` пусты, MTProto отложен.
+- Cleanup и backup timers активны; encrypted backups `job-system-20260921T090715Z.tar.age` и `job-system-20260921T103955Z.tar.age` созданы. Off-server decrypt/verification и restore drill ещё не выполнены; private AGE identity остаётся вне VPS.
+- Profile/settings существуют, но `confirmed_version=0`; `JOB_MONITORING_ENABLED=false` и monitor timer выключен до загрузки и подтверждения owner CV/профиля.
 
 ## Как здесь работает Autopilot
 

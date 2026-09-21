@@ -12,7 +12,7 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/IliaF/.codex/skills/autopilot",
   "startedAt": "2026-09-20T15:27:16+03:00",
-  "updatedAt": "2026-09-21T13:34:47+03:00",
+  "updatedAt": "2026-09-21T13:49:00+03:00",
   "finishedAt": null,
   "stages": [
     {"id":"preflight","status":"done","startedAt":"2026-09-20T15:27:16+03:00","finishedAt":"2026-09-20T15:46:44+03:00","note":"Репозиторий и исходные документы проверены"},
@@ -22,7 +22,7 @@ window.STATE =
     {"id":"plan","status":"done","finishedAt":"2026-09-20T15:46:44+03:00","note":"12 тикетов; реализация ожидает команды"},
     {"id":"build","status":"done","startedAt":"2026-09-20T16:05:00+03:00","finishedAt":"2026-09-21T05:29:05+03:00","note":"T01–T13 завершены"},
     {"id":"review","status":"done","startedAt":"2026-09-20T16:40:00+03:00","finishedAt":"2026-09-21T05:29:05+03:00","note":"Все таски приняты; T12 recovery закрыла blocking findings"},
-    {"id":"final","status":"active","startedAt":"2026-09-21T05:29:05+03:00","note":"Production healthy, owner и 50 источников готовы; live integrations/backup ожидают локального credential wizard"}
+    {"id":"final","status":"active","startedAt":"2026-09-21T05:29:05+03:00","note":"Production bbeb12b healthy; live OpenAI/Tavily/Brave/Bot и encrypted backup проверены; monitoring ожидает подтверждённый CV/profile"}
   ],
   "requirements":{"total":87,"done":87,"inTicket":0,"inSpec":0,"placeholder":0,"deferred":0,"dropped":0},
   "tickets":[
@@ -496,6 +496,6 @@ window.STATE =
   "debt":{"placeholders":[],"assumptions":[],"emptyEnv":["TELEGRAM_API_ID","TELEGRAM_API_HASH"]},
   "additions":[],"coverage":{"found":9,"fixed":9,"deferred":0,"note":"7 замечаний спецификации и 2 контракта/плана исправлены"},
   "reviewers":{"manifestSpec":"/root/spec_check","craft":"/root/craft_review"},
-  "blind":{"status":"partial","checkedAt":"2026-09-21T13:34:47+03:00","productionUpdatedAt":"2026-09-21T13:34:47+03:00","agreed":["local single-owner app","profile/CV","50-source registry","matching","research/drafts","monitoring contracts","backup bundle","design audit","VPS deploy","HTTPS","controlled restart","production owner","production 9+41 source registry","OpenAI live authentication","Tavily live search","Brave Web Search live endpoint","Telegram Bot API identity and owner chat","first encrypted production backup","backup timer"],"drift":["T14 application fallback awaits deployment/live verification","Telegram MTProto reader awaits API_ID/API_HASH","off-server decrypt/verify and restore drill pending","monitoring remains disabled until confirmed profile/search settings"],"commands":"migrate OK; browser seed OK; local acceptance 4/4; production health/static/login/owner/registry OK; controlled restart healthy; OpenAI/Tavily/Brave Web/Telegram Bot live checks OK; encrypted backup created and timer active"},
+  "blind":{"status":"partial","checkedAt":"2026-09-21T13:49:00+03:00","productionUpdatedAt":"2026-09-21T13:49:00+03:00","agreed":["local single-owner app","profile/CV","50-source registry","matching","research/drafts","monitoring contracts","backup bundle","design audit","VPS deploy","HTTPS","controlled restart","production owner","production 9+41 source registry","OpenAI live authentication","Tavily live search","Brave application Context-to-Web fallback","Telegram Bot API identity and owner chat","two encrypted production backups","backup timer","unaffected Eggent/SkyPay/blog"],"drift":["Telegram MTProto reader awaits API_ID/API_HASH","off-server decrypt/verify and restore drill pending","monitoring remains disabled until CV/profile confirmed_version is greater than zero"],"commands":"Django 364 OK (1 skipped); Node 10 OK; production image 20260921T104205Z healthy; HTTPS and neighboring services OK; OpenAI/Tavily/Brave application fallback/Telegram Bot live checks OK; two encrypted backups, backup timer active"},
   "concerns":["DROP T01 browser smoke concern: superseded by T12 real Chrome/Axe 50-scan audit","REPORT Login throttle is process-local; production currently runs one web container","DROP Python mismatch concern: production image now runs pinned Python 3.13.15","REPORT T14 research orchestration currently knows Brave search_context/search_web; consolidate behind an explicit attempt API in a later refactor","REPORT MTProto and off-server restore drill remain operational follow-ups"]
 }
