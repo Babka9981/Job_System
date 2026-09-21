@@ -1,7 +1,9 @@
 # Job System: production operations
 
-Статус: локальный пакет готовности. VPS **не изменялся**, deploy/HTTPS/live API и
-restore не считаются выполненными до отдельного пользовательского gate.
+Статус на 2026-09-21: production-развёртывание выполнено и проверено; точный снимок
+версии, сервисов и оставшихся ручных шагов — в `production-status.md`. Live API,
+первый backup и restore drill не считаются проверенными без отдельных операторских
+действий, описанных ниже.
 
 ## Изоляция и подтверждённый target
 
@@ -9,7 +11,8 @@ restore не считаются выполненными до отдельног
 - Docker активен. Caddy 2.11.4 уже владеет `80/443`; сайты Eggent, SkyPay и blog не трогаются.
 - Заняты loopback-порты `3000`, `3100`, `3101`, `18000`. Job System использует только
   новый bind `127.0.0.1:18111` и compose project `job-system`.
-- `job.web3babka.su` уже резолвится в VPS; Caddy block пока отсутствует.
+- `job.web3babka.su` обслуживается Caddy по HTTPS; перед добавлением сайта сохранён
+  `/etc/caddy/Caddyfile.before-job-system-20260921T044832Z`.
 - Runtime-каталог: `/srv/job-system`; private/database/temporary/backups разнесены.
   `temporary/` никогда не включается в backup, `.env` и Telegram session также исключены.
 
@@ -43,7 +46,7 @@ Wizard скрывает secret input и пишет только локальны
 `DJANGO_SECRET_KEY` можно командой `python -c 'import secrets; print(secrets.token_urlsafe(64))'`.
 Пароль owner не хранить постоянно: передать его лишь команде `create_owner`.
 
-## Первый deploy (только после отдельного разрешения)
+## Первый deploy / повторяемая установка (только после отдельного разрешения)
 
 Ниже команды изолированы от других compose projects. `Caddyfile.job-system` — точный
 добавляемый site block. Сначала подтвердить, что действующий Caddyfile уже импортирует
@@ -101,6 +104,11 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now job-system-monitor.timer job-system-cleanup.timer job-system-backup.timer
 systemctl list-timers 'job-system-*'
 ```
+
+На 2026-09-21 включён только `job-system-cleanup.timer`. Не включать monitor и backup
+таймеры, пока локальный wizard не подготовит production credentials и публичный
+`BACKUP_AGE_RECIPIENT`. Owner account/password также создаются только интерактивно;
+пароль не записывать в документы, shell history или файлы. MTProto reader отложен.
 
 ## Обновление, migration и rollback
 

@@ -75,7 +75,7 @@
 | R66 | «Файлы резюме, API-ключи и Telegram-сессия недоступны публично и не попадают в логи.» | done | S1,S3,S5,S10 → 01,03,06,11 | Private storage, secret handling и backup allowlist приняты |
 | R67 | «без доступа к внутренней сети VPS» | done | S7 → 08 | SSRF-защита и bounded subprocess приняты в T08 |
 | R68 | «Резервировать базу и резюме согласованным способом» | done | S10 → 11 | Согласованный snapshot DB/CV/private state, encryption и restore verification приняты |
-| R69 | «Перед запуском проверить ресурсы VPS, существующие сервисы, домен и доступ к API из его сети.» | done | S10 → 11 | Read-only аудит VPS/DNS/портов/сервисов выполнен; VPS не изменялся |
+| R69 | «Перед запуском проверить ресурсы VPS, существующие сервисы, домен и доступ к API из его сети.» | done | S10 → 11 | Read-only аудит выполнен до deploy; после restart все прежние домены повторно проверены |
 | R70 | «Критерии готовности первой рабочей поставки:» | done | S10 → 12 | Все 10 критериев имеют verified/mock-only/blocked evidence |
 | R71 | «Первую поставку с частью источников называть пилотом.» | done | S10 → 12 | Поставка явно названа пилотом во всех acceptance-материалах |
 | G01 | «OpenAI API + отдельный веб-поиск (рекомендую)» | done | S3,S6,S7,S8 → 03,07,08,09,13 | OpenAI и отдельные Tavily/Brave providers реализованы |
@@ -87,8 +87,9 @@
 | G07 | «Создаем оба компонента. @job_search_881_bot.» | done | S5,S9 → 06,10 | MTProto reader и Bot API transport реализованы отдельно |
 | G08 | «Суточный бюджет ... отдельной настройкой ... возможность изменить модель» | done | S3 → 03,13 | UI бюджета и модели профиля принят |
 | G09 | «Tavily подтверждаю, однако добавь также ... Brave search» | done | S7 → 08,13 | Auto/Tavily/Brave и provenance приняты |
-| G10 | «job.web3babka.su ... 169.58.93.185 ... проекты ... не должны быть затронуты» | done | S10 → 11 | Read-only аудит и изолированный bind/Caddy/Docker project приняты; live deploy gated |
+| G10 | «job.web3babka.su ... 169.58.93.185 ... проекты ... не должны быть затронуты» | done | S10 → 11 | Изолированный production deploy выполнен; Eggent/SkyPay/blog после restart отвечают |
 | G11 | «Резервные копии ... на том же ... 1 месяц ... последняя версия ... всегда» | done | S10 → 11 | Age-encrypted retention 30 дней с инвариантом последней успешной копии принят |
 | G12 | «платного аккаунта нет ... CryptoJobsList ... канал Телеграм» | done | S4,S5 → 05,06 | Платные адаптеры выключены; CryptoJobsList доступен через Telegram reader |
 | G13 | «Разрешаю recovery-pass сверх лимита сколько необходимо.» | done | build → recovery | Пользователь явно разрешил дополнительные recovery-pass T05/T08 |
+| G14 | «разрешаю» — production deploy на согласованный VPS/domain | done | final → production | Commit 8bd45ea развёрнут, HTTPS/health/static/restart проверены |
 | D01 | Сборка доказала: универсальная URL-эвристика не различает detail и listing/category без знания adapter | done | S2 → 02 | URL-эвристика удалена; evidence структурирован |
