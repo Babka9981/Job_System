@@ -6,6 +6,7 @@
 </style>
 <div class="vacancy-detail-stack">
 {% include "shared/page_heading.html" with heading=title description=vacancy.company %}
+<div class="action-group"><a class="button button-primary" href="{% url 'vacancy-drafts' vacancy.id %}">Подготовить отклик</a></div>
 {% if state == "conflict" %}{% include "shared/states.html" with state="conflict" %}{% endif %}
 {% if error %}<div class="feedback-banner tone-danger" role="alert">{{ error }}</div>{% endif %}
 <article class="ui-card">

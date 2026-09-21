@@ -1,9 +1,10 @@
-from django.urls import path
+from django.urls import include, path
 
 from . import views
 
 
 urlpatterns = [
+    path("", include("jobs.drafts.urls")),
     path("", views.vacancy_list, name="vacancies"),
     path("vacancies/add/", views.vacancy_add, name="vacancy-add"),
     path("vacancies/<int:vacancy_id>/", views.vacancy_detail, name="vacancy-detail"),

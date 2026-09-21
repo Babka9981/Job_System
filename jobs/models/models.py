@@ -163,8 +163,13 @@ class Draft(TimestampedModel):
     kind = models.CharField(max_length=32)
     text = models.TextField(blank=True)
     profile_version = models.PositiveIntegerField()
+    version = models.PositiveIntegerField(default=1)
     status = models.CharField(max_length=16, choices=Status, default=Status.EDITING)
     provenance = models.JSONField(default=dict, blank=True)
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["vacancy", "kind"], name="unique_draft_kind_per_vacancy"),
+        ]
 
 class Run(TimestampedModel):
     status = models.CharField(max_length=32, default="pending")

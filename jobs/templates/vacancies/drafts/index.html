@@ -1,0 +1,21 @@
+{% extends "shared/app_shell.html" %}
+{% load static %}
+{% block content %}
+<style>
+.draft-stack{display:grid;gap:1rem}.draft-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}.draft-card{display:grid;gap:1rem;align-content:start}.draft-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}.draft-heading h2{margin:0}.draft-editor{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}.draft-sources{padding:1rem;border-radius:var(--radius-control);background:var(--surface-soft)}.draft-sources summary{cursor:pointer;font-weight:700}.draft-sources a{overflow-wrap:anywhere}
+@media(max-width:80rem){.draft-grid{grid-template-columns:1fr}}
+</style>
+<div class="draft-stack">
+  {% include "shared/page_heading.html" with heading=title description=vacancy.company %}
+  <div class="action-group"><a class="button button-secondary" href="{% url 'vacancy-detail' vacancy.id %}">Назад к вакансии</a></div>
+  {% if error %}<div class="feedback-banner tone-danger" role="alert">{{ error }}</div>{% endif %}
+  {% if notice %}<div class="feedback-banner tone-success" role="status">{{ notice }}</div>{% endif %}
+  {% if not profile_ready %}<div class="feedback-banner tone-warning" role="alert">Для персонализированных откликов нужен подтверждённый профиль текущей версии. <a href="{% url 'profile' %}">Открыть профиль</a>.</div>{% endif %}
+  <div class="draft-grid">
+    {% include "vacancies/drafts/editor.html" with kind=cover_kind draft=cover_draft draft_title="Сопроводительное письмо" %}
+    {% include "vacancies/drafts/editor.html" with kind=recruiter_kind draft=recruiter_draft draft_title="Сообщение рекрутеру" %}
+  </div>
+</div>
+<script src="{% static 'ui/draft-copy.js' %}"></script>
+<script>JobDraftCopy.createCopyController({document:document,clipboard:navigator.clipboard}).start();</script>
+{% endblock %}

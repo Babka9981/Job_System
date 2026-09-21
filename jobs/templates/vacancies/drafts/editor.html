@@ -1,0 +1,49 @@
+<article class="ui-card draft-card" aria-labelledby="{{ kind }}-heading">
+  <div class="draft-heading">
+    <div><p class="eyebrow">Редактируемый черновик</p><h2 id="{{ kind }}-heading">{{ draft_title }}</h2></div>
+    {% if draft %}<span class="status-badge">{{ draft.get_status_display }}</span>{% endif %}
+  </div>
+  {% if kind == recruiter_kind and vacancy.contact %}<p><strong>Контакт из объявления:</strong> {{ vacancy.contact }}</p>{% endif %}
+  {% if draft.provenance.limited_reasons %}
+    <div class="feedback-banner tone-warning" role="status">Черновик ограничен: часть исследования или разрешённый текст вакансии недоступны. Проверьте текст перед использованием.</div>
+  {% elif draft.status == "error" %}
+    <div class="feedback-banner tone-danger" role="alert">Генерация не завершена. Сохранённый текст оставлен без изменений.</div>
+  {% endif %}
+  <form method="post" action="{% url 'draft-generate' vacancy.id kind %}" class="form-stack" data-disable-on-submit>
+    {% csrf_token %}
+    <div class="field-grid">
+      <div><label for="{{ kind }}-language">Язык</label><select class="form-control" id="{{ kind }}-language" name="language"><option value="ru">Русский</option><option value="en">English</option></select></div>
+      <div><label for="{{ kind }}-tone">Тон</label><select class="form-control" id="{{ kind }}-tone" name="tone"><option value="professional">Профессиональный</option><option value="warm">Тёплый</option><option value="direct">Прямой</option></select></div>
+      <div><label for="{{ kind }}-length">Длина</label><select class="form-control" id="{{ kind }}-length" name="length"><option value="medium">Средняя</option><option value="short">Короткая</option></select></div>
+      <div><label for="{{ kind }}-accent">Акцент</label><select class="form-control" id="{{ kind }}-accent" name="accent"><option value="experience">Опыт</option><option value="product">Продукт</option><option value="motivation">Мотивация</option></select></div>
+    </div>
+    <div><label for="{{ kind }}-note">Пожелание к тексту</label><textarea class="form-control" id="{{ kind }}-note" name="user_note" rows="3">{{ vacancy.user_note }}</textarea></div>
+    <div class="action-group">
+      <button class="button button-primary" type="submit"{% if not profile_ready %} disabled{% endif %}>{% if draft.status == "error" or error_kind == kind %}Повторить генерацию{% elif draft %}Сгенерировать заново{% else %}Сгенерировать{% endif %}</button>
+    </div>
+  </form>
+  <form method="post" action="{% url 'draft-save' vacancy.id kind %}" class="form-stack">
+    {% csrf_token %}
+    <input type="hidden" name="expected_version" value="{{ draft.version|default:0 }}">
+    <div>
+      <label for="{{ kind }}-text">Текст</label>
+      <textarea class="form-control draft-editor" id="{{ kind }}-text" name="text" rows="{% if kind == cover_kind %}14{% else %}7{% endif %}">{{ draft.text }}</textarea>
+    </div>
+    <div class="action-group">
+      <button class="button button-primary" type="submit">Сохранить</button>
+      <button class="button button-secondary" type="button" data-copy-target="{{ kind }}-text">Копировать текст</button>
+    </div>
+  </form>
+  {% if draft.provenance.company_sources %}
+  <details class="draft-sources">
+    <summary>Company sources</summary>
+    <ul>{% for source in draft.provenance.company_sources %}<li><a href="{{ source.url }}" target="_blank" rel="noopener noreferrer">{{ source.title|default:source.url }}</a></li>{% endfor %}</ul>
+  </details>
+  {% endif %}
+  {% if draft.provenance.profile_facts %}
+  <details class="draft-sources">
+    <summary>Provenance профиля</summary>
+    <ul>{% for fact in draft.provenance.profile_facts %}<li>Запись #{{ fact.id }}, версия {{ fact.profile_version }}{% if fact.source %} · {{ fact.source }}{% endif %}{% if fact.page %}, стр. {{ fact.page }}{% endif %}</li>{% endfor %}</ul>
+  </details>
+  {% endif %}
+</article>
