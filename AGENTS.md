@@ -50,9 +50,9 @@ $env:JOB_IMAGE_TAG = 'local-check'
 docker compose build web
 ```
 
-Последняя полная проверка: Django 365 passed, 1 skipped; Node 10 tests; browser matrix
-50 scans. Blind desktop 1440/mobile 390: PASS, exact raw match, keyboard Enter и zero
-horizontal overflow. Воспроизводимые `check --deploy`, acceptance и restore-команды описаны в
+Последняя полная проверка: targeted 143 passed; Django 367 passed, 1 skipped; Node UI
+10 passed; browser matrix 50 scans; blind relevant 50 passed. Воспроизводимые
+`check --deploy`, acceptance и restore-команды описаны в
 `README.md`, `docs/acceptance/pilot-acceptance.md` и `docs/operations/README.md`.
 
 ## Структура
@@ -140,11 +140,12 @@ deployment/              Docker/Caddy/systemd, wizard, backup и restore
 - Registry инициализирован 50 источниками (`9 site + 41 telegram`), но это catalog coverage, не утверждение о 50 live integrations; restricted/paid sources честно остаются `needs_access`/disabled.
 - Matching cache долговечен и приватен; его ключ включает точный текст вакансии, criteria и profile version, а `force` не возвращает stale cache.
 - `temporary/`, `.env`, Telegram sessions, WAL/SHM и caches не входят в backup; snapshot принимает только format 1 и точный allowlist.
-- Production: GitHub/main и VPS repo commit `0165fb0` (входящий product commit T16 `5283df2`), image `20260921T130111Z`, VPS `169.58.93.185`, `/srv/job-system`, compose project `job-system`, bind `127.0.0.1:18111`; container healthy, HTTPS health/login/static отвечают HTTP 200. Preview CSS присутствует в collected static и доступен по HTTP 200.
+- Production: GitHub/main и VPS repo commit `622d52c` (входящий product commit T17 `eafa798`), image `20260921T135406Z`, VPS `169.58.93.185`, `/srv/job-system`, compose project `job-system`, bind `127.0.0.1:18111`; container healthy, HTTPS health/login отвечают HTTP 200. Preview CSS присутствует в collected static и доступен по HTTP 200.
 - Caddy backup: `/etc/caddy/Caddyfile.before-job-system-20260921T044832Z`; после T15 Eggent отвечает HTTP 307, SkyPay и blog — HTTP 200.
 - Owner создан: `active_owners=1`, usable password — `true` без записи значения; signup/register закрыт и возвращает 404. Health остаётся ok.
-- OpenAI, Tavily, Brave Search, Telegram Bot/owner chat и публичный `BACKUP_AGE_RECIPIENT` настроены; OpenAI auth, Tavily search, Telegram `getMe`/`getChat` и application fallback Brave Context `OPTION_NOT_IN_PLAN` → Web Search проверены live без раскрытия credentials. `TELEGRAM_API_ID`/`TELEGRAM_API_HASH` пусты, MTProto отложен.
-- Cleanup и backup timers активны; encrypted backups `job-system-20260921T090715Z.tar.age`, `job-system-20260921T103955Z.tar.age`, pre-T15 `job-system-20260921T115026Z.tar.age` и pre-T16 `job-system-20260921T125955Z.tar.age` созданы. Off-server decrypt/verification и restore drill ещё не выполнены; private AGE identity остаётся вне VPS.
+- Production OpenAI model/profile — `gpt-5-mini`; цены за миллион токенов: input `0.25`, cached input `0.025`, output `2.00`. API key настроен; read-only `GET /v1/models/gpt-5-mini` отвечает HTTP 200. Начальная ошибка model/price исправлена; exact action остановлена до transport, потому что `daily_budget_usd=0.0000`: CV не отправлен и paid inference не выполнен. Перед генерацией отклика owner должен выбрать положительный дневной бюджет.
+- Tavily, Brave Search, Telegram Bot/owner chat и публичный `BACKUP_AGE_RECIPIENT` настроены; Tavily search, Telegram `getMe`/`getChat` и application fallback Brave Context `OPTION_NOT_IN_PLAN` → Web Search проверены live без раскрытия credentials. `TELEGRAM_API_ID`/`TELEGRAM_API_HASH` пусты, MTProto отложен.
+- Cleanup и backup timers активны; дополнительно создан pre-T17 encrypted backup `job-system-20260921T135346Z.tar.age`. Off-server decrypt/verification и restore drill ещё не выполнены; private AGE identity остаётся вне VPS.
 - Production-проверка: `profiles=1`, `resumes=1`, `confirmed_profiles=0`; CV загружен, но подтверждённых профилей нет, поэтому monitoring остаётся выключенным до подтверждения.
 
 ## Как здесь работает Autopilot
