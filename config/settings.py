@@ -97,3 +97,8 @@ CACHES = {
 }
 OWNER_USERNAME = os.environ.get("JOB_OWNER_USERNAME", "owner")
 USER_TIME_ZONE = os.environ.get("JOB_TIME_ZONE", "Europe/Moscow")
+MONITORING_SCHEDULE = os.environ.get("JOB_MONITORING_SCHEDULE", "09:00,13:00,17:00,21:00")
+MONITORING_LEASE_SECONDS = positive_env_int("JOB_MONITORING_LEASE_SECONDS", 1800)
+MONITORING_ENABLED = os.environ.get("JOB_MONITORING_ENABLED", "true").lower() == "true"
+NOTIFICATION_MAX_ATTEMPTS = positive_env_int("JOB_NOTIFICATION_MAX_ATTEMPTS", 3)
+JOB_SITE_URL = os.environ.get("JOB_SITE_URL", "")
