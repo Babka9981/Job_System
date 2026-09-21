@@ -135,12 +135,13 @@ deployment/              Docker/Caddy/systemd, wizard, backup и restore
 
 - Bare Django не читает `.env`; переменные задаются процессу, а `deployment/.env` читает только Compose/wizard.
 - `TELEGRAM_API_ID` и `TELEGRAM_API_HASH` пока можно оставить пустыми: reader будет не настроен; Bot API — независимый компонент.
-- Registry содержит 50 источников, но это catalog coverage, не утверждение о 50 live integrations; restricted/paid sources честно остаются `needs_access`/disabled.
+- Registry инициализирован 50 источниками (`9 site + 41 telegram`), но это catalog coverage, не утверждение о 50 live integrations; restricted/paid sources честно остаются `needs_access`/disabled.
 - Matching cache долговечен и приватен; его ключ включает точный текст вакансии, criteria и profile version, а `force` не возвращает stale cache.
 - `temporary/`, `.env`, Telegram sessions, WAL/SHM и caches не входят в backup; snapshot принимает только format 1 и точный allowlist.
 - Production: commit `8bd45ea`, image `20260921T044606Z`, VPS `169.58.93.185`, `/srv/job-system`, compose project `job-system`, bind `127.0.0.1:18111`; HTTPS health, login/static и controlled restart проверены 21.09.2026.
 - Caddy backup: `/etc/caddy/Caddyfile.before-job-system-20260921T044832Z`; Eggent, SkyPay и blog после deploy проверены и продолжают отвечать.
-- Включён только cleanup timer. Monitor/backup timers ждут локального wizard, production credentials и публичного `BACKUP_AGE_RECIPIENT`; owner создаётся интерактивно без записи пароля, MTProto отложен. Live APIs, первый encrypted backup и restore drill ещё не подтверждены.
+- Owner создан: `active_owners=1`, usable password — `true` без записи значения; signup/register закрыт и возвращает 404. Health остаётся ok.
+- External env keys пусты, `JOB_MONITORING_ENABLED=false`; включён только cleanup timer. Monitor/backup timers выключены до локального wizard, production credentials и публичного `BACKUP_AGE_RECIPIENT`; MTProto отложен. Live APIs, первый encrypted backup и restore drill ещё не подтверждены.
 
 ## Как здесь работает Autopilot
 

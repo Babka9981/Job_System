@@ -107,8 +107,9 @@ systemctl list-timers 'job-system-*'
 
 На 2026-09-21 включён только `job-system-cleanup.timer`. Не включать monitor и backup
 таймеры, пока локальный wizard не подготовит production credentials и публичный
-`BACKUP_AGE_RECIPIENT`. Owner account/password также создаются только интерактивно;
-пароль не записывать в документы, shell history или файлы. MTProto reader отложен.
+`BACKUP_AGE_RECIPIENT`. Owner уже создан интерактивно: `active_owners=1`, usable
+password — `true`; значение пароля не записывать в документы, shell history или файлы.
+External env keys остаются пустыми, `JOB_MONITORING_ENABLED=false`, MTProto reader отложен.
 
 ## Обновление, migration и rollback
 

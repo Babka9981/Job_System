@@ -10,11 +10,15 @@
 - Web привязан только к `127.0.0.1:18111` и опубликован через Caddy как
   `https://job.web3babka.su`.
 - Health endpoint отвечает успешно; login и static endpoints возвращают HTTP 200.
+- Owner создан: `active_owners=1`, usable password — `true`; значение пароля не записано.
+- Публичная регистрация закрыта: signup/register возвращает HTTP 404.
+- Source registry инициализирован: 50 источников (`9 site + 41 telegram`).
 - Controlled restart прошёл успешно.
 - До изменения Caddy сохранён backup
   `/etc/caddy/Caddyfile.before-job-system-20260921T044832Z`.
 - Существующие Eggent, SkyPay и blog после развёртывания проверены и продолжают отвечать.
 - `job-system-cleanup.timer` включён.
+- External env keys остаются пустыми; `JOB_MONITORING_ENABLED=false`.
 
 ## Ожидает ручной настройки
 
@@ -22,8 +26,7 @@
   `deployment/setup-wizard.sh`.
 - `job-system-backup.timer` выключен до задания публичного `BACKUP_AGE_RECIPIENT`;
   private AGE identity должна оставаться вне VPS.
-- Owner account и пароль ещё не созданы. Создать интерактивно процедурой из runbook;
-  пароль нигде не фиксировать.
+
 - MTProto reader отложен.
 - Live provider/API checks, первый encrypted backup и restore drill ещё не подтверждены.
 
