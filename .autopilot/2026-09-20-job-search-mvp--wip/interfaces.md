@@ -185,3 +185,10 @@ Content permission проверяется до LLM; CV/Search/Jobs недове�
 - `verify_snapshot(path)` принимает только format=1 и точный allowlist; исключается лишь корневой `payload/manifest.json`.
 - `CycleExecutionError` — безопасная публичная monitoring-ошибка без secret-bearing cause/context.
 - Evidence matrix: `docs/acceptance/pilot-acceptance.md`; live API/VPS проверки отделены от локальной acceptance.
+
+# Из recovery таска 14 — Brave fallback для доступного плана
+
+- `BraveSearchProvider.search_context(...)` вызывает LLM Context; `search_web(...)` вызывает Web Search.
+- Только точный `OPTION_NOT_IN_PLAN` разрешает переход Context → Web; остальные ошибки сохраняют fail-closed семантику.
+- Research считает Context и Web отдельными физическими попытками, отдельно резервирует стоимость и сохраняет оба outcome в `provider_attempts`.
+- Общий deadline и глобальный предел пяти физических поисковых запросов действуют на обе попытки.
