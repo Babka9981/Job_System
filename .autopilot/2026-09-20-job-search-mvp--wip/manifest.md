@@ -1,6 +1,6 @@
 # Манифест требований
 
-Источник: `2026-09-20-brief.md` и нормативные design-system документы.
+Источник: `2026-09-20-brief.md`, дополнение `2026-09-21-brief.md` и нормативные design-system документы.
 Все R/G реализуются только после отдельной команды. Дословные короткие цитаты — якоря;
 полное требование читается вместе с абзацем исходного ТЗ и разделом спецификации.
 Ничего не отменено и не отложено за пределы плана. Внешняя проверка условна доступами.
@@ -92,5 +92,6 @@
 | G12 | «платного аккаунта нет ... CryptoJobsList ... канал Телеграм» | done | S4,S5 → 05,06 | Платные адаптеры выключены; CryptoJobsList доступен через Telegram reader |
 | G13 | «Разрешаю recovery-pass сверх лимита сколько необходимо.» | done | build → recovery | Пользователь явно разрешил дополнительные recovery-pass T05/T08 |
 | G14 | «разрешаю» — production deploy на согласованный VPS/domain | done | final → production | Commit 8bd45ea развёрнут, HTTPS/health/static/restart проверены |
+| G15 | «Нужно исправить верстку и сделать аккуратную таблицу» | done | S13 → 15 | Commit 3b93181: читаемая плотная таблица, локальный overflow, sticky context и адаптивная browser-проверка |
 | D01 | Сборка доказала: универсальная URL-эвристика не различает detail и listing/category без знания adapter | done | S2 → 02 | URL-эвристика удалена; evidence структурирован |
 | D02 | Production доказал: Brave LLM Context отвечает OPTION_NOT_IN_PLAN, а Web Search доступен | done | G09 → 14 | Exact-code fallback, общий deadline/request cap, раздельный budget accounting и provenance приняты в T14 |
