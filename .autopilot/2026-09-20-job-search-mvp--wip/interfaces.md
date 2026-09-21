@@ -209,3 +209,8 @@ Content permission проверяется до LLM; CV/Search/Jobs недове�
 
 - `jobs.intelligence.config.DEFAULT_OPENAI_MODEL = "gpt-5-mini"` — единый default для profile, matching, drafts и research; сохранённая custom model имеет приоритет.
 - Setup price для default: input `0.25`, cached input `0.025`, output `2.00` USD за миллион токенов. Любая model без точной записи в `OPENAI_PRICES_JSON` fail-closed.
+
+# Из таска 18 — HTTP worker timeout
+
+- Worker нормализует `socket_timeout` в диапазон `0.1–120.0` секунд с default `30.0`.
+- `run_http_exchange(..., deadline=...)` остаётся владельцем абсолютного hard deadline и kill/reap subprocess; worker cap больше не обрезает OpenAI timeout до 30 секунд.

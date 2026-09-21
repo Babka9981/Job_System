@@ -311,3 +311,17 @@ API key не выводится; проверка конфигурации не 
 profile extraction должен пройти price/model preflight, вызвать fixture transport и
 сохранить черновик; настоящий OpenAI-вызов выполняется отдельно только после backup,
 deploy и с пользовательским CV в обычном owner action.
+
+## S16. Согласованный OpenAI deadline
+
+Изолированный HTTP worker не должен молча обрезать разрешённый вызывающим кодом
+socket timeout до 30 секунд. Верхняя граница worker должна позволять штатному OpenAI
+transport завершить большой CV extraction, но родительский `run_http_exchange` остаётся
+владельцем жёсткого deadline, убивает зависший subprocess и не передаёт secrets через
+argv/environment.
+
+Regression test обязан воспроизводить прежнее ограничение без live API: fake HTTPS
+connection получает socket timeout больше 30 секунд при разрешённом transport deadline;
+отдельно сохраняются clamp для невалидных/чрезмерных значений и существующие deadline,
+network/error, body-size и secret-isolation контракты. После deploy повтор выполняется
+только через budget-enforced gateway; uncertain прошлые попытки остаются pending.
