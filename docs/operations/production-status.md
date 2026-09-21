@@ -5,13 +5,14 @@
 
 ## Развёрнуто и проверено
 
-- Commit `bbeb12b` развёрнут на VPS `169.58.93.185` в `/srv/job-system`; входящий в него
-  product commit — `54dcee4`.
-- Immutable image tag: `20260921T104205Z`; compose project: `job-system`.
+- Commit `a4ded68` развёрнут на VPS `169.58.93.185` в `/srv/job-system`; входящий в него
+  product commit — `3b93181`.
+- Immutable image tag: `20260921T115126Z`; compose project: `job-system`.
 - Web привязан только к `127.0.0.1:18111` и опубликован через Caddy как
   `https://job.web3babka.su`.
 - Container healthy, HTTPS health endpoint отвечает успешно; login и static endpoints
   возвращают HTTP 200.
+- Новый sources-table CSS присутствует в collected static и доступен по HTTP 200.
 - Owner создан: `active_owners=1`, usable password — `true`; значение пароля не записано.
 - Публичная регистрация закрыта: signup/register возвращает HTTP 404.
 - Source registry инициализирован: 50 источников (`9 site + 41 telegram`).
@@ -28,8 +29,9 @@
 - OpenAI authentication, Tavily search, Telegram `getMe`/`getChat` проверены live.
 - Brave LLM Context возвращает `OPTION_NOT_IN_PLAN`; application fallback на Brave Web
   Search проверен live и вернул один результат.
-- Созданы encrypted backups `job-system-20260921T090715Z.tar.age` и pre-update
-  `job-system-20260921T103955Z.tar.age`; правила доступа к файлам проверены.
+- Созданы encrypted backups `job-system-20260921T090715Z.tar.age`, pre-update
+  `job-system-20260921T103955Z.tar.age` и pre-T15
+  `job-system-20260921T115026Z.tar.age`; правила доступа к файлам проверены.
 
 ## Ожидает ручного действия
 

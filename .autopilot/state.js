@@ -12,7 +12,7 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/IliaF/.codex/skills/autopilot",
   "startedAt": "2026-09-20T15:27:16+03:00",
-  "updatedAt": "2026-09-21T14:48:37+03:00",
+  "updatedAt": "2026-09-21T14:54:56+03:00",
   "finishedAt": null,
   "stages": [
     {"id":"preflight","status":"done","startedAt":"2026-09-20T15:27:16+03:00","finishedAt":"2026-09-20T15:46:44+03:00","note":"Репозиторий и исходные документы проверены"},
@@ -22,7 +22,7 @@ window.STATE =
     {"id":"plan","status":"done","finishedAt":"2026-09-20T15:46:44+03:00","note":"12 тикетов; реализация ожидает команды"},
     {"id":"build","status":"done","startedAt":"2026-09-20T16:05:00+03:00","finishedAt":"2026-09-21T14:40:10+03:00","note":"T01–T15 завершены"},
     {"id":"review","status":"done","startedAt":"2026-09-20T16:40:00+03:00","finishedAt":"2026-09-21T14:40:10+03:00","note":"T15 принят: manifest/spec done, blocking craft findings нет"},
-    {"id":"final","status":"active","startedAt":"2026-09-21T05:29:05+03:00","note":"T15 blind acceptance пройдена; production update ожидает выполнения"}
+    {"id":"final","status":"active","startedAt":"2026-09-21T05:29:05+03:00","note":"T15 deployed и healthy; общий production pilot ожидает подтверждённый CV/profile"}
   ],
   "requirements":{"total":88,"done":88,"inTicket":0,"inSpec":0,"placeholder":0,"deferred":0,"dropped":0},
   "tickets":[
@@ -513,6 +513,6 @@ window.STATE =
   "debt":{"placeholders":[],"assumptions":[],"emptyEnv":["TELEGRAM_API_ID","TELEGRAM_API_HASH"]},
   "additions":[],"coverage":{"found":9,"fixed":9,"deferred":0,"note":"7 замечаний спецификации и 2 контракта/плана исправлены"},
   "reviewers":{"manifestSpec":"/root/spec_check","craft":"/root/craft_review"},
-  "blind":{"status":"partial","checkedAt":"2026-09-21T14:48:37+03:00","productionUpdatedAt":"2026-09-21T13:49:00+03:00","agreed":["local single-owner app","profile/CV","50-source registry","matching","research/drafts","monitoring contracts","backup bundle","design audit","VPS deploy","HTTPS","controlled restart","production owner","production 9+41 source registry","OpenAI live authentication","Tavily live search","Brave application Context-to-Web fallback","Telegram Bot API identity and owner chat","two encrypted production backups","backup timer","unaffected Eggent/SkyPay/blog","Sources table layout: local overflow, sticky context, 10 aligned columns"],"drift":["Telegram MTProto reader awaits API_ID/API_HASH","off-server decrypt/verify and restore drill pending","monitoring remains disabled until CV/profile confirmed_version is greater than zero"],"commands":"Django 364 OK (1 skipped); Node 10 OK; browser 50/50 scans plus blind seeded desktop/mobile visual inspection; production image 20260921T104205Z healthy; HTTPS and neighboring services OK; OpenAI/Tavily/Brave application fallback/Telegram Bot live checks OK; two encrypted backups, backup timer active"},
+  "blind":{"status":"partial","checkedAt":"2026-09-21T14:48:37+03:00","productionUpdatedAt":"2026-09-21T14:54:56+03:00","agreed":["local single-owner app","profile/CV","50-source registry","matching","research/drafts","monitoring contracts","backup bundle","design audit","VPS deploy","HTTPS","controlled restart","production owner","production 9+41 source registry","OpenAI live authentication","Tavily live search","Brave application Context-to-Web fallback","Telegram Bot API identity and owner chat","three encrypted production backups","backup timer","unaffected Eggent/SkyPay/blog","Sources table layout: local overflow, sticky context, 10 aligned columns","Sources table production static rollout"],"drift":["Telegram MTProto reader awaits API_ID/API_HASH","off-server decrypt/verify and restore drill pending","monitoring remains disabled until CV/profile confirmed_version is greater than zero"],"commands":"Django 364 OK (1 skipped); Node 10 OK; browser 50/50 scans plus blind seeded desktop/mobile visual inspection; production image 20260921T115126Z healthy; sources table static present and HTTP 200; HTTPS and neighboring services OK; OpenAI/Tavily/Brave application fallback/Telegram Bot live checks OK; three encrypted backups, backup timer active"},
   "concerns":["DROP T01 browser smoke concern: superseded by T12 real Chrome/Axe 50-scan audit","REPORT Login throttle is process-local; production currently runs one web container","DROP Python mismatch concern: production image now runs pinned Python 3.13.15","REPORT T14 research orchestration currently knows Brave search_context/search_web; consolidate behind an explicit attempt API in a later refactor","REPORT MTProto and off-server restore drill remain operational follow-ups","REPORT T15 test maintainability: Django assertions bind to CSS hooks; browser checks reset 200% before sticky/local-scroll assertions and do not fixture long wrapping; CSS total table width duplicates column-width sum"]
 }
