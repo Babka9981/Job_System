@@ -66,7 +66,7 @@ class TelethonHistoryClient:
         from telethon.sync import TelegramClient
 
         session = private_session_path(environ.get("TELEGRAM_SESSION_PATH") or None)
-        client = TelegramClient(str(session), int(raw_id), api_hash)
+        client = TelegramClient(str(session), int(raw_id), api_hash, flood_sleep_threshold=0)
         return cls(client)
 
     def connect(self):
@@ -90,12 +90,12 @@ class TelethonHistoryClient:
             from telethon import events
 
             @self.client.on(events.MessageEdited)
-            def edited(event):
+            async def edited(event):
                 message = self._message(event.message)
                 self._updates.append(TelegramUpdate("edited", message.message_id, message, getattr(event, "chat_id", None)))
 
             @self.client.on(events.MessageDeleted)
-            def deleted(event):
+            async def deleted(event):
                 for message_id in event.deleted_ids:
                     self._updates.append(TelegramUpdate("deleted", int(message_id), peer_id=getattr(event, "chat_id", None)))
         except Exception:
@@ -143,13 +143,18 @@ class TelethonHistoryClient:
                 raw_max_id=max(raw_ids, default=0),
             )
         except Exception as error:
-            raise self._safe_error(error) from error
+            safe_error = self._safe_error(error)
+        raise safe_error from None
 
     def fetch_updates(self, peer, *, checkpoint):
         try:
             entity_id = int(getattr(self.client.get_entity(peer), "id"))
-        except Exception:
-            return ()
+        except Exception as error:
+            safe_error = self._safe_error(error)
+        else:
+            safe_error = None
+        if safe_error is not None:
+            raise safe_error from None
         matched = []
         remaining = []
         for update in self._updates:

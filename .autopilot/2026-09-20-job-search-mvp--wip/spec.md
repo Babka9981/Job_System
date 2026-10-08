@@ -348,3 +348,20 @@ Default `JOB_PROFILE_MAX_OUTPUT_TOKENS` равен 8000 для `gpt-5-mini`: pro
 Regression test фиксирует передаваемый max_output_tokens=8000 и рассчитанный максимум
 стоимости, без live API/CV. `.env.example` документирует значение; deployment wizard не
 перезаписывает ручной override. Production уже использует 8000 и draft v2 доступен owner.
+
+## S19. Live Telegram collection (G18/D06)
+
+Авторизованная MTProto-сессия используется существующим TelegramReader из штатного
+collector. Выбор источников ограничен owner, enabled и source_slugs. Общая fenced
+collector lease и отдельная holder-scoped lease сессии исключают конкурентную запись.
+Перед каждой записью reader проверяет fencing; lazy shared client освобождается всегда.
+Сохранить seven-day initial window, checkpoints, updates и существующие permissions.
+Ошибки отдельного канала не останавливают другие источники; FloodWait сохраняет retry
+gate и останавливает дальнейшие Telegram-вызовы этой попытки без внутреннего sleep.
+Telethon event callbacks awaitable; raw provider errors/text не выводятся пользователю.
+
+Scoped `collect_telegram` импортирует только Telegram без LLM, matching, уведомлений
+или включения monitoring; ограничение страниц позволяет контролировать первый live
+импорт. CLI выводит агрегаты и безопасные channel slug/status. Авторизация не означает
+разрешение LLM-обработки текста канала. Monitoring остаётся выключенным до ручного
+подтверждения профиля.

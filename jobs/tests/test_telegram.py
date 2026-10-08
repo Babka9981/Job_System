@@ -1,8 +1,12 @@
 import hashlib
+import inspect
+import asyncio
+import traceback
 import os
 from io import StringIO
 from datetime import timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
@@ -14,7 +18,8 @@ from django.http import HttpResponse
 from django.urls import path, reverse
 from django.utils import timezone
 
-from jobs.models.models import Source, SourceRecord, Vacancy
+from jobs.models.models import Lease, Source, SourceRecord, Vacancy
+from jobs.sources.core.collector import CollectorBusy, collect_sources
 from jobs.matching.services import evaluate
 from jobs.sources.core.registry import seed_sources
 from jobs.sources.telegram.adapter import (
@@ -61,6 +66,133 @@ class FakeHistoryClient:
 
     def fetch_updates(self, peer, *, checkpoint):
         return tuple(self.updates)
+
+
+class TelegramCollectorTests(TestCase):
+    def setUp(self):
+        self.owner = get_user_model().objects.create_user("owner")
+        self.source, _ = add_or_enable_source(self.owner, "@collector_jobs")
+
+    def test_default_collector_reads_selected_enabled_owner_channels_and_closes_shared_client(self):
+        disabled, _ = add_or_enable_source(self.owner, "@disabled_jobs")
+        set_source_enabled(self.owner, "@disabled_jobs", False)
+        other = get_user_model().objects.create_user("other")
+        add_or_enable_source(other, "@other_jobs")
+        add_or_enable_source(self.owner, "@unselected_jobs")
+        client = FakeHistoryClient([HistoryPage((HistoryMessage(
+            10, "Vacancy: Product Manager\nCompany: Acme\nOwn roadmap",
+            timezone.now(), public_handle="collector_jobs",
+        ),))])
+        client.connect = Mock(return_value=None)
+        client.disconnect = Mock()
+        with patch("jobs.sources.telegram.session.TelethonHistoryClient.from_environment", return_value=client):
+            report = collect_sources(self.owner, holder="fixture", source_slugs=[self.source.slug, disabled.slug])
+        self.assertEqual((report.succeeded, report.failed, report.records), (1, 0, 1))
+        self.assertEqual(len(client.calls), 1)
+        client.connect.assert_called_once_with()
+        client.disconnect.assert_called_once_with()
+        self.assertFalse(SourceRecord.objects.get().description_permission)
+        self.assertFalse(Lease.objects.exists())
+
+    @override_settings(OWNER_USERNAME="owner")
+    def test_scoped_command_emits_only_aggregates_and_safe_source_status(self):
+        client = FakeHistoryClient()
+        client.disconnect = Mock()
+        output = StringIO()
+        with patch("jobs.sources.telegram.session.TelethonHistoryClient.from_environment", return_value=client):
+            call_command("collect_telegram", source=[self.source.slug], max_pages=1, stdout=output)
+        self.assertIn("succeeded=1 failed=0", output.getvalue())
+        self.assertIn(f"{self.source.slug}: ready", output.getvalue())
+        self.assertNotIn("api_hash", output.getvalue())
+
+    def test_flood_wait_blocks_remaining_channels_and_retry_until_delay_passes(self):
+        next_source, _ = add_or_enable_source(self.owner, "@following_jobs")
+        now = timezone.now()
+        client = FakeHistoryClient(failure=HistoryAccessError("flood_wait", "Повторите позже", retryable=True, retry_after=60))
+        client.disconnect = Mock()
+        first = collect_sources(self.owner, holder="flood", telegram_client_factory=lambda: client, now=now, clock=lambda: now)
+        self.assertEqual((first.failed, first.skipped), (1, 1))
+        self.assertEqual(len(client.calls), 1)
+        factory = Mock(return_value=FakeHistoryClient())
+        second = collect_sources(self.owner, holder="early", source_slugs=[self.source.slug], telegram_client_factory=factory, now=now + timedelta(seconds=20), clock=lambda: now + timedelta(seconds=20))
+        self.assertEqual(second.skipped, 1)
+        factory.assert_not_called()
+        next_source.refresh_from_db()
+        self.assertIsNone(next_source.last_success)
+
+    def test_lease_loss_during_fetch_prevents_records_checkpoints_and_failure_writes(self):
+        source = self.source
+        owner = self.owner
+
+        class Takeover(FakeHistoryClient):
+            def fetch_history(self, *args, **kwargs):
+                Lease.objects.filter(name=f"source-collector:{owner.pk}").update(holder="new-holder")
+                return HistoryPage((HistoryMessage(10, "Vacancy: Product Manager\nCompany: Acme\nOwn roadmap", timezone.now(), public_handle="collector_jobs"),))
+
+        client = Takeover()
+        client.disconnect = Mock()
+        with self.assertRaises(CollectorBusy):
+            collect_sources(owner, holder="old-holder", telegram_client_factory=lambda: client)
+        source.refresh_from_db()
+        self.assertNotIn("telegram_checkpoint", source.config)
+        self.assertNotIn("last_error", source.config)
+        self.assertFalse(SourceRecord.objects.exists())
+        self.assertEqual(Lease.objects.get().holder, "new-holder")
+        client.disconnect.assert_called_once_with()
+
+    def test_configuration_failure_is_safe_and_following_site_continues(self):
+        from jobs.sources.core.contracts import Batch, Coverage
+
+        site = Source.objects.create(owner=self.owner, slug="fixture-site", name="Site", kind="site", adapter="fixture", enabled=True)
+        adapter = Mock()
+        adapter.collect.return_value = Batch(records=(), coverage=Coverage())
+        factory = Mock(side_effect=TelegramConfigurationError("config_unavailable", "Локальные параметры не настроены."))
+        report = collect_sources(self.owner, holder="unconfigured", adapters={"fixture": adapter}, telegram_client_factory=factory)
+        self.assertEqual((report.failed, report.succeeded), (1, 1))
+        self.source.refresh_from_db()
+        site.refresh_from_db()
+        self.assertEqual(self.source.status, Source.Status.NEEDS_ACCESS)
+        self.assertEqual(site.status, Source.Status.READY)
+        self.assertEqual(self.source.config["last_error"]["code"], "config_unavailable")
+
+    def test_access_failure_does_not_stop_following_channel_and_client_closes_once(self):
+        following, _ = add_or_enable_source(self.owner, "@following_jobs")
+
+        class SelectiveClient(FakeHistoryClient):
+            def fetch_history(self, peer, **kwargs):
+                if peer == "https://t.me/collector_jobs":
+                    raise HistoryAccessError("access_denied", "Нет доступа.")
+                return HistoryPage(())
+
+        client = SelectiveClient()
+        client.disconnect = Mock()
+        report = collect_sources(self.owner, holder="isolated", telegram_client_factory=lambda: client)
+        self.assertEqual((report.failed, report.succeeded), (1, 1))
+        following.refresh_from_db()
+        self.assertEqual(following.status, Source.Status.READY)
+        client.disconnect.assert_called_once_with()
+
+    def test_session_lease_prevents_a_second_owner_from_opening_shared_session(self):
+        Lease.objects.create(name="telegram-runtime-session", holder="active-session", expires_at=timezone.now() + timedelta(minutes=5))
+        factory = Mock()
+        with self.assertRaises(CollectorBusy):
+            collect_sources(self.owner, holder="second-owner", telegram_client_factory=factory)
+        factory.assert_not_called()
+        self.assertEqual(Lease.objects.get().holder, "active-session")
+
+    def test_report_counts_committed_records_before_later_page_flood_wait(self):
+        class LaterFlood(FakeHistoryClient):
+            def fetch_history(self, peer, **kwargs):
+                if kwargs["offset_id"]:
+                    raise HistoryAccessError("flood_wait", "Повторите позже", retryable=True, retry_after=30)
+                return HistoryPage((HistoryMessage(10, "Vacancy: Product Manager\nCompany: Acme\nOwn roadmap", timezone.now(), public_handle="collector_jobs"),), next_offset_id=10)
+
+        report = collect_sources(self.owner, holder="partial-flood", telegram_client_factory=LaterFlood)
+        self.assertEqual((report.failed, report.records), (1, 1))
+        self.source.refresh_from_db()
+        self.assertEqual(self.source.config["telegram_checkpoint"]["offset_id"], 10)
+
+
 
 
 class TelegramRegistryTests(TestCase):
@@ -654,6 +786,50 @@ class TelegramPaginationTests(TestCase):
 
 
 class TelegramSessionTests(TestCase):
+    def test_history_gateway_errors_detach_private_upstream_context(self):
+        class BrokenClient:
+            def get_entity(self, peer):
+                raise RuntimeError("PRIVATE_UPSTREAM_SENTINEL")
+
+            def iter_messages(self, *args, **kwargs):
+                raise RuntimeError("PRIVATE_UPSTREAM_SENTINEL")
+
+        client = TelethonHistoryClient(BrokenClient())
+        for operation in (
+            lambda: client.fetch_updates("@jobs", checkpoint={}),
+            lambda: client.fetch_history("@jobs", after_id=0, offset_id=0, limit=1),
+        ):
+            with self.subTest(operation=operation), self.assertRaises(HistoryAccessError) as caught:
+                operation()
+            error = caught.exception
+            self.assertEqual(error.code, "history_unavailable")
+            self.assertIsNone(error.__cause__)
+            self.assertIsNone(error.__context__)
+            self.assertNotIn("PRIVATE_UPSTREAM_SENTINEL", "".join(traceback.format_exception(error)))
+
+    def test_live_update_callbacks_are_awaitable(self):
+        class RawClient:
+            def __init__(self):
+                self.callbacks = []
+
+            def on(self, event):
+                def register(callback):
+                    self.callbacks.append(callback)
+                    return callback
+                return register
+
+        raw = RawClient()
+        client = TelethonHistoryClient(raw)
+        client._install_update_handlers()
+        self.assertEqual(len(raw.callbacks), 2)
+        self.assertTrue(all(inspect.iscoroutinefunction(callback) for callback in raw.callbacks))
+        raw.get_entity = lambda peer: SimpleNamespace(id=42)
+        message = SimpleNamespace(id=10, message="Vacancy: Product Manager", chat_id=-10042, date=timezone.now(), edit_date=timezone.now())
+        asyncio.run(raw.callbacks[0](SimpleNamespace(message=message, chat_id=-10042)))
+        asyncio.run(raw.callbacks[1](SimpleNamespace(deleted_ids=[11], chat_id=-10042)))
+        updates = client.fetch_updates("@collector_jobs", checkpoint={})
+        self.assertEqual([(event.kind, event.message_id) for event in updates], [("edited", 10), ("deleted", 11)])
+
     def test_session_path_must_be_private_and_created_with_restrictive_permissions(self):
         with TemporaryDirectory() as directory:
             private_root = Path(directory) / "private"

@@ -224,3 +224,12 @@ Content permission проверяется до LLM; CV/Search/Jobs недове�
 
 - `JOB_PROFILE_MAX_OUTPUT_TOKENS` имеет default `8000`; явный environment override сохраняется.
 - Переданный лимит участвует в консервативном budget reservation до transport.
+
+# Из таска 21 — Telegram в штатном collector
+
+- `collect_sources(..., telegram_client_factory=None)` лениво создаёт общий MTProto client для выбранных enabled owner sources; результаты входят в `CollectionReport`.
+- `TelegramReader(client, ..., write_guard=None)` выполняет guard внутри transaction перед каждой записью; `TelegramFenceLost` распространяется как `CollectorBusy` на collector boundary.
+- Global lease `telegram-runtime-session` предотвращает конкурентное использование runtime session; освобождение holder-scoped, client disconnect выполняется всегда.
+- FloodWait прекращает дальнейшие Telegram-запросы и сохраняет owner-wide cooldown по safe retry_after; committed records остаются в aggregate даже при ошибке следующей страницы.
+- `manage.py collect_telegram [--source SLUG ...] [--max-pages 1..20]` собирает только Telegram, default одна страница; вывод только aggregate/slug/status, без matching/LLM/notification.
+- Telethon event callbacks awaitable; `flood_sleep_threshold=0` исключает автоматический sleep при FloodWait.

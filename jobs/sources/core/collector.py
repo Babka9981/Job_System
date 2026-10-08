@@ -15,6 +15,8 @@ from jobs.sources.public.http import JsonHttpClient
 from jobs.sources.public.jobicy import JobicyAdapter
 from jobs.sources.public.remote_ok import RemoteOkAdapter
 from jobs.sources.rvc.adapter import RvcAdapter, RvcMcpClient, RvcStreamableHttpToolCaller
+from jobs.sources.telegram.adapter import HistoryAccessError, TelegramFenceLost, TelegramReader
+from jobs.sources.telegram.session import TelegramConfigurationError, TelethonHistoryClient
 from jobs.vacancies.services import upsert_record
 
 
@@ -85,6 +87,24 @@ def _is_due(source, now):
     if source.cursor:
         return True
     return not interval or not source.last_success or source.last_success + timedelta(seconds=interval) <= now
+
+
+def _telegram_retry_pending(owner, now):
+    for config in Source.objects.filter(owner=owner, kind="telegram").values_list("config", flat=True):
+        if not isinstance(config, dict):
+            continue
+        error = config.get("last_error")
+        if not isinstance(error, dict) or error.get("code") != "flood_wait":
+            continue
+        checked = _as_datetime(config.get("last_check"))
+        seconds = error.get("retry_after")
+        if checked and type(seconds) is int and seconds >= 0:
+            try:
+                if checked + timedelta(seconds=seconds) > now:
+                    return True
+            except OverflowError:
+                return True
+    return False
 
 
 def _safe_failure(source, now, code, message):
@@ -177,6 +197,7 @@ def collect_sources(
     clock=None,
     rvc_call_tool=None,
     temporary_store=None,
+    telegram_client_factory=None,
 ):
     """Collect enabled sources under one lease; checkpoint only committed pages."""
     clock = clock or timezone.now
@@ -186,11 +207,80 @@ def collect_sources(
     lease_name = f"source-collector:{owner.pk}"
     _acquire_lease(lease_name, holder, now)
     succeeded = failed = skipped = records = 0
+    telegram_client = None
+    telegram_clients = []
+    telegram_error = None
+    telegram_stopped = False
+    session_lease = "telegram-runtime-session"
+    session_acquired = False
+
+    def telegram_guard():
+        try:
+            _renew_lease(lease_name, holder, clock())
+            if session_acquired:
+                _renew_lease(session_lease, holder, clock())
+        except CollectorBusy:
+            raise TelegramFenceLost() from None
+
     try:
+        telegram_stopped = _telegram_retry_pending(owner, now)
         queryset = Source.objects.filter(owner=owner, enabled=True).order_by("id")
         if source_slugs is not None:
             queryset = queryset.filter(slug__in=source_slugs)
         for source in queryset:
+            if source.kind == "telegram" and source.adapter == "telegram":
+                if telegram_stopped:
+                    skipped += 1
+                    continue
+                try:
+                    checkpoint = source.config.get("telegram_checkpoint", {}) if isinstance(source.config, dict) else {}
+                    resuming = isinstance(checkpoint, dict) and bool(checkpoint.get("offset_id"))
+                    if not _is_due(source, now) and not resuming:
+                        skipped += 1
+                        continue
+                    if not session_acquired:
+                        with transaction.atomic():
+                            _renew_lease(lease_name, holder, clock())
+                            _acquire_lease(session_lease, holder, clock())
+                        session_acquired = True
+                    if telegram_client is None and telegram_error is None:
+                        try:
+                            telegram_client = (telegram_client_factory or TelethonHistoryClient.from_environment)()
+                            telegram_clients.append(telegram_client)
+                            connect = getattr(telegram_client, "connect", None)
+                            if callable(connect):
+                                connected = connect()
+                                if connected is not None and hasattr(connected, "is_authorized"):
+                                    telegram_client = connected
+                                    if all(connected is not item for item in telegram_clients):
+                                        telegram_clients.append(connected)
+                        except TelegramConfigurationError as error:
+                            telegram_error = HistoryAccessError(error.code, error.safe_message)
+                        except Exception:
+                            telegram_error = HistoryAccessError("client_unavailable", "Не удалось подготовить Telegram-клиент.", retryable=True)
+                    reader = TelegramReader(telegram_client, max_pages=max_pages, now=clock, write_guard=telegram_guard)
+                    result = reader._failure(source, telegram_error) if telegram_error else reader.sync_source(source)
+                    records += result.created + result.updated
+                    if result.error_code:
+                        failed += 1
+                        telegram_stopped = result.error_code == "flood_wait"
+                    else:
+                        succeeded += 1
+                except TelegramFenceLost:
+                    raise CollectorBusy("Право на сбор источников утрачено.") from None
+                except CollectorBusy:
+                    raise
+                except SourceCollectionError as error:
+                    TelegramReader(None, now=clock, write_guard=telegram_guard)._failure(
+                        source, HistoryAccessError(error.code, error.safe_message)
+                    )
+                    failed += 1
+                except Exception:
+                    TelegramReader(None, now=clock, write_guard=telegram_guard)._failure(
+                        source, HistoryAccessError("source_sync_failed", "Не удалось безопасно обработать Telegram-источник.", retryable=True)
+                    )
+                    failed += 1
+                continue
             adapter = adapters.get(source.adapter)
             if adapter is None:
                 skipped += 1
@@ -259,5 +349,16 @@ def collect_sources(
             else:
                 succeeded += 1
         return CollectionReport(succeeded=succeeded, failed=failed, skipped=skipped, records=records)
+    except TelegramFenceLost:
+        raise CollectorBusy("Право на сбор источников утрачено.") from None
     finally:
+        for client in reversed(telegram_clients):
+            cleanup = getattr(client, "disconnect", None) or getattr(client, "close", None)
+            if callable(cleanup):
+                try:
+                    cleanup()
+                except Exception:
+                    pass
+        if session_acquired:
+            _release_lease(session_lease, holder)
         _release_lease(lease_name, holder)

@@ -1,5 +1,6 @@
 import hashlib
-from dataclasses import dataclass
+from contextlib import contextmanager
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 
@@ -20,6 +21,10 @@ class HistoryAccessError(Exception):
         self.retryable = retryable
         self.retry_after = retry_after
         super().__init__(safe_message)
+
+
+class TelegramFenceLost(Exception):
+    """Collector ownership was lost; never turn this into a source write."""
 
 
 @dataclass(frozen=True)
@@ -227,13 +232,25 @@ def _protected_manual_description(vacancy):
 class TelegramReader:
     """Deterministic Telegram history reader; no bot token and no LLM calls."""
 
-    def __init__(self, client, *, page_size=100, max_pages=20, now=None):
+    def __init__(self, client, *, page_size=100, max_pages=20, now=None, write_guard=None):
         self.client = client
         self.page_size = page_size
         self.max_pages = max_pages
         self.now = now or timezone.now
+        self.write_guard = write_guard
+
+    @contextmanager
+    def _write(self):
+        with transaction.atomic():
+            if self.write_guard:
+                self.write_guard()
+            yield
 
     def _failure(self, source, error):
+        with self._write():
+            return self._save_failure(source, error)
+
+    def _save_failure(self, source, error):
         config = _safe_config(source)
         if error.code == "invalid_checkpoint":
             config["telegram_checkpoint"] = {"message_id": 0, "offset_id": 0, "window_max_id": 0}
@@ -243,7 +260,7 @@ class TelegramReader:
         config["last_error"] = detail
         config["last_check"] = self.now().isoformat()
         source.config = config
-        source.status = Source.Status.NEEDS_ACCESS if error.code in {"session_unauthorized", "access_denied"} else Source.Status.ERROR
+        source.status = Source.Status.NEEDS_ACCESS if error.code in {"session_unauthorized", "access_denied", "config_unavailable", "auth_required", "dependency_unavailable", "unsafe_session_path"} else Source.Status.ERROR
         source.save(update_fields=["config", "status", "updated_at"])
         return SyncReport(error_code=error.code)
 
@@ -255,6 +272,10 @@ class TelegramReader:
         source.config = config
 
     def _save_checkpoint(self, source, message_id, *, offset_id=0, window_max_id=0):
+        with self._write():
+            self._persist_checkpoint(source, message_id, offset_id=offset_id, window_max_id=window_max_id)
+
+    def _persist_checkpoint(self, source, message_id, *, offset_id=0, window_max_id=0):
         config = _safe_config(source)
         config["telegram_checkpoint"] = {
             "message_id": int(message_id or 0),
@@ -269,7 +290,7 @@ class TelegramReader:
     def _process_message(self, source, message):
         parsed = parse_post(message.text)
         if parsed.needs_review:
-            with transaction.atomic():
+            with self._write():
                 self._record_review(source, message, parsed.reason)
                 source.save(update_fields=["config", "updated_at"])
             return 0, 0, 1
@@ -283,7 +304,7 @@ class TelegramReader:
         )
         current_ids = []
         used_ids = set()
-        with transaction.atomic():
+        with self._write():
             for vacancy in parsed.vacancies:
                 description = sanitize_source_text(vacancy.description)
                 part_key = _part_key(vacancy)
@@ -367,7 +388,7 @@ class TelegramReader:
         try:
             for event in self.client.fetch_updates(source.config.get("url", ""), checkpoint=checkpoint):
                 if event.kind == "deleted":
-                    with transaction.atomic():
+                    with self._write():
                         deleted += _mark_post_removed(source, event.message_id)
                 elif event.kind == "edited" and event.message is not None:
                     c, u, r = self._process_message(source, event.message)
@@ -377,6 +398,8 @@ class TelegramReader:
 
             pages = 0
             while pages < self.max_pages:
+                with self._write():
+                    pass
                 page = self.client.fetch_history(
                     source.config.get("url", ""), after_id=after_id, offset_id=offset_id, limit=self.page_size
                 )
@@ -406,10 +429,15 @@ class TelegramReader:
                     raise HistoryAccessError("cursor_stalled", "Telegram вернул повторяющуюся позицию истории.", retryable=True)
                 offset_id = page.next_offset_id
                 self._save_checkpoint(source, after_id, offset_id=offset_id, window_max_id=window_max_id)
+        except TelegramFenceLost:
+            raise
         except HistoryAccessError as error:
-            return self._failure(source, error)
+            return replace(self._failure(source, error), created=created, updated=updated, deleted=deleted, review=review, skipped=skipped)
         except Exception:
-            return self._failure(source, HistoryAccessError("history_failure", "Не удалось безопасно прочитать историю Telegram.", retryable=True))
+            return replace(
+                self._failure(source, HistoryAccessError("history_failure", "Не удалось безопасно прочитать историю Telegram.", retryable=True)),
+                created=created, updated=updated, deleted=deleted, review=review, skipped=skipped,
+            )
 
         config = _safe_config(source)
         config["last_error"] = None
@@ -422,7 +450,8 @@ class TelegramReader:
             source.status = Source.Status.LIMITED if config.get("telegram_review") else Source.Status.READY
         source.config = config
         source.last_success = self.now()
-        source.save(update_fields=["config", "status", "last_success", "updated_at"])
+        with self._write():
+            source.save(update_fields=["config", "status", "last_success", "updated_at"])
         return SyncReport(created, updated, deleted, review, skipped)
 
 
